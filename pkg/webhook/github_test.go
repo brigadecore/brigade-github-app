@@ -65,10 +65,11 @@ func TestGithubHandler(t *testing.T) {
 		mustFail     bool
 	}{
 		{
-			event:       "check_suite",
-			commit:      "c61cc68b5c2ec7d48d6d5e89d9e3d99182a4f817",
-			ref:         "refs/heads/test/check_suite",
-			payloadFile: "testdata/github-check_suite-payload.json",
+			event:        "check_suite",
+			renamedEvent: "check_suite:requested",
+			commit:       "c61cc68b5c2ec7d48d6d5e89d9e3d99182a4f817",
+			ref:          "refs/heads/test/check_suite",
+			payloadFile:  "testdata/github-check_suite-payload.json",
 		},
 		{
 			event:       "push",

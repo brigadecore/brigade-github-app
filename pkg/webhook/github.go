@@ -24,6 +24,7 @@ const (
 // EventCheckSuite is a placeholder for JSON unmarshalling.
 // This will be replaced when the Go GitHub library catches up.
 type EventCheckSuite struct {
+	Action     string     `json:"action"`
 	CheckSuite CheckSuite `json:"check_suite"`
 	Repo       Repository `json:"repository"`
 }
@@ -31,6 +32,7 @@ type EventCheckSuite struct {
 // EventCheckRun is a placeholder for JSON unmarshalling.
 // This will be replaced when the Go GitHub library catches up.
 type EventCheckRun struct {
+	Action   string `json:"action"`
 	CheckRun struct {
 		HeadSHA    string     `json:"head_sha"`
 		CheckSuite CheckSuite `json:"check_suite"`
@@ -108,6 +110,9 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 	log.Print(string(body))
 
+	// This can be further refined
+	brigEvent := eventType
+
 	var repo string
 	var rev brigade.Revision
 	switch eventType {
@@ -119,6 +124,9 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
 			return
 		}
+
+		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
+		brigEvent = fmt.Sprintf("%s:%s", eventType, e.Action)
 		repo = e.Repo.FullName
 		rev.Commit = e.CheckSuite.HeadSHA
 		rev.Ref = fmt.Sprintf("refs/heads/%s", e.CheckSuite.HeadBranch)
@@ -130,6 +138,8 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
 			return
 		}
+
+		brigEvent = fmt.Sprintf("%s:%s", eventType, e.Action)
 		repo = e.Repo.FullName
 		rev.Commit = e.CheckRun.HeadSHA
 		rev.Ref = fmt.Sprintf("refs/heads/%s", e.CheckRun.CheckSuite.HeadBranch)
@@ -142,7 +152,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		return
 	}
 
-	s.buildStatus(eventType, rev, body, proj)
+	s.build(brigEvent, rev, body, proj)
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
 
@@ -232,28 +242,8 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		return
 	}
 
-	s.buildStatus(eventType, rev, body, proj)
-
+	s.build(eventType, rev, body, proj)
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
-}
-
-// buildStatus runs a build, and sets upstream status accordingly.
-func (s *githubHook) buildStatus(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) {
-	if err := s.build(eventType, rev, payload, proj); err != nil {
-		log.Printf("Creating Build failed: %s", err)
-		svc := StatusContext
-		msg := truncAt(err.Error(), 140)
-		status := new(github.RepoStatus)
-		status.State = &StatePending
-		status.Description = &msg
-		status.Context = &svc
-		status.State = &StateFailure
-		status.Description = &msg
-		if err := s.createStatus(rev.Commit, proj, status); err != nil {
-			// For this one, we just log an error and continue.
-			log.Printf("Error setting status to %s: %s", *status.State, err)
-		}
-	}
 }
 
 // isAllowedPullRequest returns true if this particular pull request is allowed

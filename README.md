@@ -110,6 +110,15 @@ You will want to make sure to set:
 - `sharedSecret` to use the shared secret you created when creating the app
 - `github.token` (aka `github: {token: }`) to the OAuth token GitHub Apps gave you
 
+## Events Emitted by this Gateway
+
+- `check_suite:requested`: When a new request is opened
+- `check_suite:rerequested`: When checks are requested again
+- `check_suite:completed`: When a check suite is completed
+- `check_run:created`: When an individual test is requested
+- `check_run:updated`: When an individual test is updated with new status
+- `check_run:rerequested`: When an individual test is re-requested
+
 ## Building From Source
 
 Prerequisites:
