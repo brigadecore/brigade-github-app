@@ -109,8 +109,7 @@ You will want to make sure to set:
 
 ## TODO
 
-- [ ] Fix service/ingress definitions
-- [ ] Remove hard-coded data from values.yaml
+- [ ] Move images to correct Docker repo
 
 # Contributing
 
