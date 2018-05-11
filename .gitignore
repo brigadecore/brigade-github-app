@@ -1,9 +1,15 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+/bin/
+/rootfs/github-gateway
+/vendor/
+node_modules/
+
+
+# IDEs
+.vscode/
+.idea/
+
+# Developer
+pvt/
 
 # Test binary, build with `go test -c`
 *.test
