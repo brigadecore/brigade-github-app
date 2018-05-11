@@ -4,8 +4,8 @@
 
 **This is considered experimental and pre-Alpha. Do not use it in production.**
 
-This is a Brigade gateway that provides a GitHub App with deep integration to
-GitHub's new Check API.
+This is a [Brigade](https://github.com/Azure/brigade) gateway that provides a
+GitHub App with deep integration to GitHub's new Check API.
 
 ## Installation
 
@@ -33,6 +33,9 @@ $ helm inspect values ./charts/brigade-github-app > values.yaml
 $ # Edit values.yaml
 $ helm install -n gh-app ./charts/brigade-github-app
 ```
+
+On RBAC-enabled clusters, pass `--set rbac.enabled=true` to the `helm install`
+command.
 
 ### 2. (RECOMMENDED) Create a DNS entry for your app
 
@@ -106,6 +109,24 @@ You will want to make sure to set:
 - `project`, `repository`, and `cloneURL`  to point to your repo
 - `sharedSecret` to use the shared secret you created when creating the app
 - `github.token` (aka `github: {token: }`) to the OAuth token GitHub Apps gave you
+
+## Building From Source
+
+Prerequisites:
+
+- The Go tool chain
+- `dep` for Go dependency management
+- `make`
+- Docker
+
+To build from source:
+
+```console
+$ dep ensure         # to install dependencies into vendor/
+$ make test          # to run tests
+$ make build         # to build local
+$ make docker-build  # to build a Docker image
+```
 
 ## TODO
 
