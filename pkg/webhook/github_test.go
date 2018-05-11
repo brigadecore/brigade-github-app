@@ -65,6 +65,12 @@ func TestGithubHandler(t *testing.T) {
 		mustFail     bool
 	}{
 		{
+			event:       "check_suite",
+			commit:      "c61cc68b5c2ec7d48d6d5e89d9e3d99182a4f817",
+			ref:         "refs/heads/test/check_suite",
+			payloadFile: "testdata/github-check_suite-payload.json",
+		},
+		{
 			event:       "push",
 			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
 			ref:         "refs/heads/changes",
@@ -166,7 +172,6 @@ func TestGithubHandler(t *testing.T) {
 				t.Fatalf("failed to create request: %s", err)
 			}
 			r.Header.Add("X-GitHub-Event", tt.event)
-			r.Header.Add("X-Hub-Signature", SHA1HMAC([]byte("asdf"), payload))
 
 			ctx, _ := gin.CreateTestContext(w)
 			ctx.Request = r

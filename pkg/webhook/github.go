@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -19,6 +20,36 @@ const (
 	brigadeJSFile      = "brigade.js"
 	hubSignatureHeader = "X-Hub-Signature"
 )
+
+// EventCheckSuite is a placeholder for JSON unmarshalling.
+// This will be replaced when the Go GitHub library catches up.
+type EventCheckSuite struct {
+	CheckSuite CheckSuite `json:"check_suite"`
+	Repo       Repository `json:"repository"`
+}
+
+// EventCheckRun is a placeholder for JSON unmarshalling.
+// This will be replaced when the Go GitHub library catches up.
+type EventCheckRun struct {
+	CheckRun struct {
+		HeadSHA    string     `json:"head_sha"`
+		CheckSuite CheckSuite `json:"check_suite"`
+	} `json:"check_run"`
+	Repo Repository `json:"repository"`
+}
+
+// CheckSuite is a placeholder for JSON unmarshalling.
+// This will be replaced when the Go GitHub library catches up.
+type CheckSuite struct {
+	HeadBranch string `json:"head_branch"`
+	HeadSHA    string `json:"head_sha"`
+}
+
+// Respository is a placeholder for JSON unmarshalling.
+// This will be replaced when the Go GitHub library catches up.
+type Repository struct {
+	FullName string `json:"full_name"`
+}
 
 type githubHook struct {
 	store          storage.Store
@@ -55,12 +86,64 @@ func (s *githubHook) Handle(c *gin.Context) {
 	case "push", "pull_request", "create", "release", "status", "commit_comment", "pull_request_review", "deployment", "deployment_status":
 		s.handleEvent(c, event)
 		return
+	// Added
+	case "check_suite", "check_run":
+		s.handleCheck(c, event)
 	default:
 		// Issue #127: Don't return an error for unimplemented events.
 		log.Printf("Unsupported event %q", event)
 		c.JSON(200, gin.H{"message": "Ignored"})
 		return
 	}
+}
+
+func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
+	body, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("Failed to read body: %s", err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+		return
+	}
+	defer c.Request.Body.Close()
+
+	log.Print(string(body))
+
+	var repo string
+	var rev brigade.Revision
+	switch eventType {
+	case "check_suite":
+		e := &EventCheckSuite{}
+		err := json.Unmarshal(body, e)
+		if err != nil {
+			log.Printf("Failed to parse body: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+			return
+		}
+		repo = e.Repo.FullName
+		rev.Commit = e.CheckSuite.HeadSHA
+		rev.Ref = fmt.Sprintf("refs/heads/%s", e.CheckSuite.HeadBranch)
+	case "check_run":
+		e := &EventCheckRun{}
+		err := json.Unmarshal(body, e)
+		if err != nil {
+			log.Printf("Failed to parse body: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+			return
+		}
+		repo = e.Repo.FullName
+		rev.Commit = e.CheckRun.HeadSHA
+		rev.Ref = fmt.Sprintf("refs/heads/%s", e.CheckRun.CheckSuite.HeadBranch)
+	}
+
+	proj, err := s.store.GetProject(repo)
+	if err != nil {
+		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
+		return
+	}
+
+	s.buildStatus(eventType, rev, body, proj)
+	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
 
 func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
@@ -147,22 +230,6 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
 		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
 		return
-	}
-
-	if proj.SharedSecret == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
-		return
-	}
-
-	signature := c.Request.Header.Get(hubSignatureHeader)
-	if err := validateSignature(signature, proj.SharedSecret, body); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
-		return
-	}
-
-	if proj.Name != repo {
-		// TODO: Test this. I believe it should error out if these don't match.
-		log.Printf("!!!WARNING!!! Expected project secret to have name %q, got %q", repo, proj.Name)
 	}
 
 	s.buildStatus(eventType, rev, body, proj)
