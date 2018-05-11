@@ -1,6 +1,6 @@
 # Brigade Github App: Advanced GitHub Gateway for Brigade
 
-i[![Stability: Experimental](https://masterminds.github.io/stability/experimental.svg)](https://masterminds.github.io/stability/experimental.html)
+[![Stability: Experimental](https://masterminds.github.io/stability/experimental.svg)](https://masterminds.github.io/stability/experimental.html)
 
 **This is considered experimental and pre-Alpha. Do not use it in production.**
 
