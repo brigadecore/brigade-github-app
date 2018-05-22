@@ -1,4 +1,4 @@
 apiVersion: v1
 description: The Brigade GitHub App, an adnvanced gateway for GitHub
 name: brigade-github-app
-version: 0.1.0
+version: 0.1.1

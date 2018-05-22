@@ -28,3 +28,7 @@ ingress:
       hosts:
       - gh-app.example.com
 
+github:
+  # The x509 PEM-formatted keyfile GitHub issued for you App.
+  key: |
+    REQUIRED: Your key goes here.

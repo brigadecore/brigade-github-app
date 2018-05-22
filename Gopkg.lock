@@ -6,8 +6,7 @@
   packages = [
     "pkg/brigade",
     "pkg/storage",
-    "pkg/storage/kube",
-    "pkg/webhook"
+    "pkg/storage/kube"
   ]
   revision = "83c0a43f9cc3e8da15e2a2f8ed774c496e75f574"
   version = "v0.13.1"
@@ -26,7 +25,14 @@
 [[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
-  revision = "782f4967f2dc4564575ca782fe2d04090b5faca8"
+  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
+  version = "v1.1.0"
+
+[[projects]]
+  name = "github.com/dgrijalva/jwt-go"
+  packages = ["."]
+  revision = "06ea1031745cb8b3dab3f6a236daf2b0aa468b7e"
+  version = "v3.2.0"
 
 [[projects]]
   name = "github.com/emicklei/go-restful"
@@ -201,9 +207,21 @@
   version = "v2.0.1"
 
 [[projects]]
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/spf13/pflag"
   packages = ["."]
   revision = "9ff6c6923cfffbcd502984b8e0c80539a94968b7"
+
+[[projects]]
+  name = "github.com/stretchr/testify"
+  packages = ["assert"]
+  revision = "12b6f73e6084dad08a7c6e575284b177ecafbc71"
+  version = "v1.2.1"
 
 [[projects]]
   name = "github.com/ugorji/go"
@@ -433,6 +451,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "52f7a2fd84ab2b6d4688da3b3b5e08d6f0dc07387793035a17ba0894b3e3a971"
+  inputs-digest = "00247bdb92f091bb608c6cc5971d73b4657686cefd06e8e70130d9153354bb1c"
   solver-name = "gps-cdcl"
   solver-version = 1

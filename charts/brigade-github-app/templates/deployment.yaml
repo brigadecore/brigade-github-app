@@ -31,11 +31,11 @@ spec:
               fieldRef:
                 fieldPath: metadata.namespace
           - name: GATEWAY_CONFIG
-            value: "/etc/brigade-github-app/filters.json"
+            value: "/etc/brigade-github-app/key.pem"
         volumeMounts:
-          - name: filters-config
+          - name: github-config
             mountPath: /etc/brigade-github-app
       volumes:
-        - name: filters-config
+        - name: github-config
           configMap:
             name: {{ $fullname }}

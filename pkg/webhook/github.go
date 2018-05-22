@@ -21,43 +21,13 @@ const (
 	hubSignatureHeader = "X-Hub-Signature"
 )
 
-// EventCheckSuite is a placeholder for JSON unmarshalling.
-// This will be replaced when the Go GitHub library catches up.
-type EventCheckSuite struct {
-	Action     string     `json:"action"`
-	CheckSuite CheckSuite `json:"check_suite"`
-	Repo       Repository `json:"repository"`
-}
-
-// EventCheckRun is a placeholder for JSON unmarshalling.
-// This will be replaced when the Go GitHub library catches up.
-type EventCheckRun struct {
-	Action   string `json:"action"`
-	CheckRun struct {
-		HeadSHA    string     `json:"head_sha"`
-		CheckSuite CheckSuite `json:"check_suite"`
-	} `json:"check_run"`
-	Repo Repository `json:"repository"`
-}
-
-// CheckSuite is a placeholder for JSON unmarshalling.
-// This will be replaced when the Go GitHub library catches up.
-type CheckSuite struct {
-	HeadBranch string `json:"head_branch"`
-	HeadSHA    string `json:"head_sha"`
-}
-
-// Respository is a placeholder for JSON unmarshalling.
-// This will be replaced when the Go GitHub library catches up.
-type Repository struct {
-	FullName string `json:"full_name"`
-}
-
 type githubHook struct {
 	store          storage.Store
 	getFile        fileGetter
 	createStatus   statusCreator
 	allowedAuthors []string
+	// key is the x509 certificate key as ASCII-armored (PEM) data
+	key []byte
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -65,12 +35,13 @@ type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
 type statusCreator func(commit string, proj *brigade.Project, status *github.RepoStatus) error
 
 // NewGithubHook creates a GitHub webhook handler.
-func NewGithubHook(s storage.Store, authors []string) gin.HandlerFunc {
+func NewGithubHook(s storage.Store, authors []string, x509Key []byte) gin.HandlerFunc {
 	gh := &githubHook{
 		store:          s,
 		getFile:        getFileFromGithub,
 		createStatus:   setRepoStatus,
 		allowedAuthors: authors,
+		key:            x509Key,
 	}
 	return gh.Handle
 }
@@ -115,6 +86,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 	var repo string
 	var rev brigade.Revision
+	var res *Payload
 	switch eventType {
 	case "check_suite":
 		e := &EventCheckSuite{}
@@ -123,6 +95,13 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			log.Printf("Failed to parse body: %s", err)
 			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
 			return
+		}
+
+		res = &Payload{
+			Body:   e,
+			AppID:  e.CheckSuite.App.ID,
+			InstID: e.Installation.ID,
+			Type:   "check_suite",
 		}
 
 		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
@@ -139,6 +118,13 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			return
 		}
 
+		res = &Payload{
+			Body:   e,
+			AppID:  e.CheckRun.App.ID,
+			InstID: e.Installation.ID,
+			Type:   "check_run",
+		}
+
 		brigEvent = fmt.Sprintf("%s:%s", eventType, e.Action)
 		repo = e.Repo.FullName
 		rev.Commit = e.CheckRun.HeadSHA
@@ -152,7 +138,32 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		return
 	}
 
-	s.build(brigEvent, rev, body, proj)
+	tok, timeout, err := s.installationToken(res.AppID, res.InstID, proj.Github)
+	if err != nil {
+		log.Printf("Failed to negotiate a token: %s", err)
+		c.JSON(http.StatusForbidden, gin.H{"status": "Auth Failed"})
+		return
+	}
+	res.Token = tok
+	res.TokenExpires = timeout
+
+	// Remarshal the body back into JSON
+	pl := map[string]interface{}{}
+	err = json.Unmarshal(body, &pl)
+	res.Body = pl
+	if err != nil {
+		log.Printf("Failed to re-parse body: %s", err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Our parser is probably broken"})
+		return
+	}
+
+	payload, err := json.Marshal(res)
+	if err != nil {
+		log.Print(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
+		return
+	}
+	s.build(brigEvent, rev, payload, proj)
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
 
@@ -289,23 +300,13 @@ func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, erro
 }
 
 func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) error {
-	brigadeScript, err := s.getFile(rev.Commit, brigadeJSFile, proj)
-	if err != nil {
-		if proj.DefaultScript == "" {
-			return fmt.Errorf("no brigade.js found in either project's defaultScript or the git repository: %v", err)
-		}
-		brigadeScript = []byte(proj.DefaultScript)
-	}
-
 	b := &brigade.Build{
 		ProjectID: proj.ID,
 		Type:      eventType,
 		Provider:  "github",
 		Revision:  &rev,
 		Payload:   payload,
-		Script:    brigadeScript,
 	}
-
 	return s.store.CreateBuild(b)
 }
 

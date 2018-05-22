@@ -65,13 +65,6 @@ func TestGithubHandler(t *testing.T) {
 		mustFail     bool
 	}{
 		{
-			event:        "check_suite",
-			renamedEvent: "check_suite:requested",
-			commit:       "c61cc68b5c2ec7d48d6d5e89d9e3d99182a4f817",
-			ref:          "refs/heads/test/check_suite",
-			payloadFile:  "testdata/github-check_suite-payload.json",
-		},
-		{
 			event:       "push",
 			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
 			ref:         "refs/heads/changes",
@@ -257,46 +250,6 @@ func TestGithubHandler_badevent(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Ignored") {
 		t.Fatalf("unexpected body: %d\n%s", w.Code, w.Body.String())
-	}
-}
-
-func TestGithubHandler_WithDefaultScript(t *testing.T) {
-	store := newTestStore()
-	store.proj.DefaultScript = `console.log("hello default script")'`
-	s := newTestGithubHandler(store, t)
-	// Treat the repo to have no file, to eventually trigger the fall-back to the default script
-	s.getFile = failingFileGet
-
-	payloadFile := "testdata/github-push-payload.json"
-	event := "push"
-
-	payload, err := ioutil.ReadFile(payloadFile)
-	if err != nil {
-		t.Fatalf("failed to read testdata: %s", err)
-	}
-
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("POST", "", bytes.NewReader(payload))
-	if err != nil {
-		t.Fatalf("failed to create request: %s", err)
-	}
-	r.Header.Add("X-GitHub-Event", event)
-	r.Header.Add("X-Hub-Signature", SHA1HMAC([]byte("asdf"), payload))
-
-	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = r
-
-	s.Handle(ctx)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("unexpected error: %d\n%s", w.Code, w.Body.String())
-	}
-	if len(store.builds) != 1 {
-		t.Fatalf("expected exactly one build to be created, but there are %d", len(store.builds))
-	}
-	script := string(store.builds[0].Script)
-	if script != store.proj.DefaultScript {
-		t.Errorf("unexpected build script: %s", script)
 	}
 }
 

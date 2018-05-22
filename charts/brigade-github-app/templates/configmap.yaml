@@ -11,8 +11,5 @@ metadata:
     role: gateway
     type: kubernetes-events
 data:
-  filters.json: |
-    {
-      "project": {{ .Values.project | quote }},
-      "filters": {{ toJson .Values.filters }}
-    }
+  key.pem: |
+{{ .Values.github.key | trim | indent 8}}
