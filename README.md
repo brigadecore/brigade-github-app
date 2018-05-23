@@ -176,8 +176,10 @@ This gateway emits the following events:
 - `check_run:updated`: When an individual test is updated with new status
 - `check_run:rerequested`: When an individual test is re-requested
 
-Of these, `check_suite:requested` and `check_suite:rerequested` are the ones
-expected to trigger new builds.
+The `check_suite` events will let you start all of your tests at once, while the
+`check_run` events will let you work with individual tests. The example in the
+next section shows how to work with suites, while still supporting re-runs of the
+main test.
 
 ### Running a new set of checks
 
@@ -194,6 +196,7 @@ const checkRunImage = "technosophos/brigade-github-check-run:latest"
 
 events.on("check_suite:requested", checkRequested)
 events.on("check_suite:rerequested", checkRequested)
+events.on("check_run:rerequested", checkRequested)
 
 function checkRequested(e, p) {
   console.log("check requested")
@@ -242,6 +245,30 @@ function checkRequested(e, p) {
 
 ```
 
+### Parameters available on the `check-run` container
+
+The following parameters can be specified via environment variables:
+
+- `CHECK_PAYLOAD` (REQUIRED): The contents of `e.payload`.
+- `CHECK_NAME` (default: Brigade): The name of the check. You should set this unless
+  you are only running a single check.
+- `CHECK_TITLE` (default: "running check"): The title that will be displayed on GitHub
+- `CHECK_SUMMARY`: A short summary of what the check did.
+- `CHECK_TEXT`: A long message explaining the results.
+- `CHECK_CONCLUSION`: One of: "succeeded", "failure", "neutral", "canceled", or "timed_out".
+  The "action_required" conclusion can be set if CHECK_DETAILS_URL is also set.
+- `CHECK_DETAILS_URL`: The URL of an external site that has more information. This
+  is typically used with CHECK_CONCLUSION=action_required.
+- `CHECK_EXTERNAL_ID`: An ID that correlates this run to another source. For example,
+  it could be set to the Brigade build ID.
+- `GITHUB_BASE_URL`: The URL for GitHub Enterprise users.
+- `GITHUB_UPLOAD_URL`: The upload URL for GitHub Enterprise users.
+
+> Annotations and Image attachments are not currently supported.
+
+You can observe these in action on this screenshot:
+
+![screenshot](docs/screenshot.png)
 
 ## Building From Source
 
