@@ -17,18 +17,18 @@ docker-build: docker-build-check-run
 .PHONY: docker-build-gateway
 docker-build-gateway:
 	GOOS=linux GOARCH=amd64 go build -o rootfs/github-gateway ./cmd/github-gateway/...
-	docker build -t technosophos/brigade-github-app:latest .
+	docker build -t deis/brigade-github-app:latest .
 
 .PHONY: docker-build-check-run
 docker-build-check-run:
 	GOOS=linux GOARCH=amd64 go build -o rootfs/check-run ./cmd/check-run/...
-	docker build -f Dockerfile.check-run -t technosophos/brigade-github-check-run:latest .
+	docker build -f Dockerfile.check-run -t deis/brigade-github-check-run:latest .
 
 # You must be logged into DOCKER_REGISTRY before you can push.
 .PHONY: docker-push
 docker-push:
-	docker push technosophos/brigade-github-app
-	docker push technosophos/brigade-github-check-run
+	docker push deis/brigade-github-app
+	docker push deis/brigade-github-check-run
 
 .PHONY: redeploy
 redeploy: test
