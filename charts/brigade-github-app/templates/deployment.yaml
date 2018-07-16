@@ -26,7 +26,7 @@ spec:
         image: "{{ .Values.registry }}/{{ .Values.name }}:{{ default .Chart.AppVersion .Values.tag }}"
         imagePullPolicy: {{ default "IfNotPresent" .Values.pullPolicy }}
         env:
-          - name: GATEWAY_NAMESPACE
+          - name: BRIGADE_NAMESPACE
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
