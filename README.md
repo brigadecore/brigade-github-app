@@ -124,7 +124,7 @@ _Only select repositories_, and click _Install_
 
 ### 6. Add Brigade projects for each GitHub project
 
-For each GitHub project that you enabled teh app for, you will now need to
+For each GitHub project that you enabled the app for, you will now need to
 create a Project.
 
 Remember that projects contain secret data, and should be handled with care.

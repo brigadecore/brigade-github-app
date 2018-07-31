@@ -1,9 +1,7 @@
 package webhook
 
 import (
-	"crypto/subtle"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,11 +12,6 @@ import (
 
 	"github.com/Azure/brigade/pkg/brigade"
 	"github.com/Azure/brigade/pkg/storage"
-)
-
-const (
-	brigadeJSFile      = "brigade.js"
-	hubSignatureHeader = "X-Hub-Signature"
 )
 
 type githubHook struct {
@@ -287,14 +280,6 @@ func (s *githubHook) isAllowedAuthor(author string) bool {
 	return false
 }
 
-func truncAt(str string, max int) string {
-	if len(str) > max {
-		short := str[0 : max-3]
-		return short + "..."
-	}
-	return str
-}
-
 func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, error) {
 	return GetFileContents(proj, commit, path)
 }
@@ -308,14 +293,4 @@ func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byt
 		Payload:   payload,
 	}
 	return s.store.CreateBuild(b)
-}
-
-// validateSignature compares the salted digest in the header with our own computing of the body.
-func validateSignature(signature, secretKey string, payload []byte) error {
-	sum := SHA1HMAC([]byte(secretKey), payload)
-	if subtle.ConstantTimeCompare([]byte(sum), []byte(signature)) != 1 {
-		log.Printf("Expected signature %q (sum), got %q (hub-signature)", sum, signature)
-		return errors.New("payload signature check failed")
-	}
-	return nil
 }

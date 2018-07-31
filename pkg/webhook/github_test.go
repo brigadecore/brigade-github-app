@@ -253,20 +253,6 @@ func TestGithubHandler_badevent(t *testing.T) {
 	}
 }
 
-func TestTruncAt(t *testing.T) {
-	if "foo" != truncAt("foo", 100) {
-		t.Fatal("modified string that was fine.")
-	}
-
-	if got := truncAt("foobar", 6); got != "foobar" {
-		t.Errorf("Unexpected truncation of foobar: %s", got)
-	}
-
-	if got := truncAt("foobar1", 6); got != "foo..." {
-		t.Errorf("Unexpected truncation of foobar1: %s", got)
-	}
-}
-
 // failingFileGet is a `fileGetter` which is useful for simulating a situation that the project repository to contain no file
 func failingFileGet(commit, path string, proj *brigade.Project) ([]byte, error) {
 	return []byte{}, fmt.Errorf("simulated \"missing file\" error for commit=%s, path=%s, proj.name=%s", commit, path, proj.Name)

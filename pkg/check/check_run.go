@@ -80,7 +80,7 @@ type Output struct {
 	Summary string `json:"summary"`
 	// Text is the details
 	// Markdown allowed
-	Text string `json:"text",omitempty`
+	Text string `json:"text,omitempty"`
 
 	// Annotations is a list of annotations
 	Annotations []Annotation `json:"annotations,omitempty"`
@@ -105,5 +105,5 @@ type Annotation struct {
 type Image struct {
 	ImageURL string `json:"image_url"`
 	Alt      string `json:"alt"`
-	Caption  string `json:caption,omitempty"`
+	Caption  string `json:"caption,omitempty"`
 }

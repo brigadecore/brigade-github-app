@@ -31,7 +31,7 @@ type CheckSuite struct {
 	App        App    `json:"app"`
 }
 
-// Respository is a placeholder for JSON unmarshalling.
+// Repository is a placeholder for JSON unmarshalling.
 // This will be replaced when the Go GitHub library catches up.
 type Repository struct {
 	FullName string `json:"full_name"`
