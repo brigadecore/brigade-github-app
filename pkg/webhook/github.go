@@ -89,7 +89,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 	var res *Payload
 	switch eventType {
 	case "check_suite":
-		e := &EventCheckSuite{}
+		e := &github.CheckSuiteEvent{}
 		err := json.Unmarshal(body, e)
 		if err != nil {
 			log.Printf("Failed to parse body: %s", err)
@@ -99,18 +99,18 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 		res = &Payload{
 			Body:   e,
-			AppID:  e.CheckSuite.App.ID,
-			InstID: e.Installation.ID,
+			AppID:  int(*e.CheckSuite.App.ID),
+			InstID: int(*e.Installation.ID),
 			Type:   "check_suite",
 		}
 
 		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
-		brigEvent = fmt.Sprintf("%s:%s", eventType, e.Action)
-		repo = e.Repo.FullName
-		rev.Commit = e.CheckSuite.HeadSHA
-		rev.Ref = fmt.Sprintf("refs/heads/%s", e.CheckSuite.HeadBranch)
+		brigEvent = fmt.Sprintf("%s:%s", eventType, *e.Action)
+		repo = *e.Repo.FullName
+		rev.Commit = *e.CheckSuite.HeadSHA
+		rev.Ref = fmt.Sprintf("refs/heads/%s", *e.CheckSuite.HeadBranch)
 	case "check_run":
-		e := &EventCheckRun{}
+		e := &github.CheckRunEvent{}
 		err := json.Unmarshal(body, e)
 		if err != nil {
 			log.Printf("Failed to parse body: %s", err)
@@ -120,15 +120,15 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 		res = &Payload{
 			Body:   e,
-			AppID:  e.CheckRun.App.ID,
-			InstID: e.Installation.ID,
+			AppID:  int(*e.CheckRun.App.ID),
+			InstID: int(*e.Installation.ID),
 			Type:   "check_run",
 		}
 
-		brigEvent = fmt.Sprintf("%s:%s", eventType, e.Action)
-		repo = e.Repo.FullName
-		rev.Commit = e.CheckRun.HeadSHA
-		rev.Ref = fmt.Sprintf("refs/heads/%s", e.CheckRun.CheckSuite.HeadBranch)
+		brigEvent = fmt.Sprintf("%s:%s", eventType, *e.Action)
+		repo = *e.Repo.FullName
+		rev.Commit = *e.CheckRun.HeadSHA
+		rev.Ref = fmt.Sprintf("refs/heads/%s", *e.CheckRun.CheckSuite.HeadBranch)
 	}
 
 	proj, err := s.store.GetProject(repo)
