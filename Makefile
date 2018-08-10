@@ -36,6 +36,10 @@ redeploy: docker-build
 redeploy: docker-push
 redeploy:
 	kubectl delete `kubectl get po -l app=github-app-test-brigade-github-app -o name`
-	@echo Waiting for pod to start... (20 seconds)
+	@echo 'Waiting for pod to start... (20 seconds)'
 	sleep 20
 	kubectl logs -f `kubectl get po -l app=github-app-test-brigade-github-app -o name | tail -n 1 | sed 's/pod\///'`
+
+.PHONY: bootstrap
+bootstrap:
+	dep ensure
