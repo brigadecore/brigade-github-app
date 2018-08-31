@@ -103,6 +103,23 @@ func GetLastCommit(proj *brigade.Project, ref string) (string, error) {
 	return sha, err
 }
 
+// GetPRFiles gets a list of files changed in the given PR ID
+func GetPRFiles(proj *brigade.Project, id int) ([]*github.CommitFile, error) {
+	client, err := ghClient(proj.Github)
+	if err != nil {
+		return []*github.CommitFile{}, err
+	}
+	ctx := context.Background()
+	parts := strings.SplitN(proj.Repo.Name, "/", 3)
+	if len(parts) != 3 {
+		return []*github.CommitFile{}, fmt.Errorf("project name %q is malformed", proj.Repo.Name)
+	}
+
+	opts := &github.ListOptions{}
+	res, _, err := client.PullRequests.ListFiles(ctx, parts[1], parts[2], id, opts)
+	return res, err
+}
+
 // GetFileContents returns the contents for a particular file in the project.
 func GetFileContents(proj *brigade.Project, ref, path string) ([]byte, error) {
 	c := context.Background()

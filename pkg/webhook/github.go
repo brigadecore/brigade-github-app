@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/google/go-github/github"
 	"gopkg.in/gin-gonic/gin.v1"
@@ -87,6 +88,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 	var repo string
 	var rev brigade.Revision
 	var res *Payload
+	prIDs := []int64{}
 	switch eventType {
 	case "check_suite":
 		e := &github.CheckSuiteEvent{}
@@ -95,6 +97,10 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			log.Printf("Failed to parse body: %s", err)
 			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
 			return
+		}
+
+		for _, pr := range e.CheckSuite.PullRequests {
+			prIDs = append(prIDs, pr.GetID())
 		}
 
 		res = &Payload{
@@ -118,6 +124,10 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			return
 		}
 
+		for _, pr := range e.CheckRun.PullRequests {
+			prIDs = append(prIDs, pr.GetID())
+		}
+
 		res = &Payload{
 			Body:   e,
 			AppID:  int(*e.CheckRun.App.ID),
@@ -136,6 +146,16 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
 		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
 		return
+	}
+
+	for _, id := range prIDs {
+		if hasBlockedFiles(id, proj) {
+			// What should we do here? Update the status on this to mark it as failed?
+			// Just ignore it?
+			log.Printf("Project %q has blocked files. Run skipped.", repo)
+			c.JSON(http.StatusForbidden, gin.H{"status": "Insufficient privileges"})
+			return
+		}
 	}
 
 	tok, timeout, err := s.installationToken(res.AppID, res.InstID, proj.Github)
@@ -287,6 +307,33 @@ func (s *githubHook) isAllowedAuthor(author string) bool {
 	return false
 }
 
+func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) error {
+	b := &brigade.Build{
+		ProjectID: proj.ID,
+		Type:      eventType,
+		Provider:  "github",
+		Revision:  &rev,
+		Payload:   payload,
+	}
+	return s.store.CreateBuild(b)
+}
+
+func hasBlockedFiles(id int64, proj *brigade.Project) bool {
+	files, err := GetPRFiles(proj, int(id))
+	if err != nil {
+		log.Printf("Falied to get list of files on PR. Not running check. %s", err)
+		return true
+	}
+	for _, f := range files {
+		n := f.GetFilename()
+		// FIXME: What exactly do we want to do here? Block only root?
+		if strings.Contains(n, "brigade.js") { // This will get both brigade.js and brigade.json
+			return true
+		}
+	}
+	return false
+}
+
 func truncAt(str string, max int) string {
 	if len(str) > max {
 		short := str[0 : max-3]
@@ -297,17 +344,6 @@ func truncAt(str string, max int) string {
 
 func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, error) {
 	return GetFileContents(proj, commit, path)
-}
-
-func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) error {
-	b := &brigade.Build{
-		ProjectID: proj.ID,
-		Type:      eventType,
-		Provider:  "github",
-		Revision:  &rev,
-		Payload:   payload,
-	}
-	return s.store.CreateBuild(b)
 }
 
 // validateSignature compares the salted digest in the header with our own computing of the body.
