@@ -89,6 +89,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 	var rev brigade.Revision
 	var res *Payload
 	prIDs := []int64{}
+	isFork := false
 	switch eventType {
 	case "check_suite":
 		e := &github.CheckSuiteEvent{}
@@ -104,6 +105,9 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 				log.Printf("User is not allowed for PR %d", pr.GetID())
 				c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
 				return
+			}
+			if pr.GetHead().GetRepo().GetFork() {
+				isFork = true
 			}
 			prIDs = append(prIDs, pr.GetID())
 		}
@@ -135,6 +139,9 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 				c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
 				return
 			}
+			if pr.GetHead().GetRepo().GetFork() {
+				isFork = true
+			}
 			prIDs = append(prIDs, pr.GetID())
 		}
 
@@ -158,13 +165,17 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		return
 	}
 
-	for _, id := range prIDs {
-		if hasBlockedFiles(id, proj) {
-			// What should we do here? Update the status on this to mark it as failed?
-			// Just ignore it?
-			log.Printf("Project %q has blocked files. Run skipped.", repo)
-			c.JSON(http.StatusForbidden, gin.H{"status": "Insufficient privileges"})
-			return
+	// Until we have a better idea... if a PR is a fork, don't let the check suite run when
+	// the brigade.js/brigade.json files have been altered.
+	if isFork {
+		for _, id := range prIDs {
+			if hasBlockedFiles(id, proj) {
+				// What should we do here? Update the status on this to mark it as failed?
+				// Just ignore it?
+				log.Printf("Project %q has blocked files. Run skipped.", repo)
+				c.JSON(http.StatusForbidden, gin.H{"status": "Insufficient privileges"})
+				return
+			}
 		}
 	}
 
@@ -290,7 +301,6 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 // isAllowedPullRequest returns true if this particular pull request is allowed
 // to produce an event.
 func (s *githubHook) isAllowedPullRequest(pr *github.PullRequest, action string) bool {
-
 	isFork := pr.Head.Repo.GetFork()
 
 	// This applies the author association to forked PRs.
@@ -302,6 +312,10 @@ func (s *githubHook) isAllowedPullRequest(pr *github.PullRequest, action string)
 	}
 	switch action {
 	case "opened", "synchronize", "reopened", "labeled", "unlabeled", "closed":
+		// PR actions
+		return true
+	case "rerequested", "requested", "completed", "created", "requested_action":
+		// Check suite actions
 		return true
 	}
 	log.Println("unsupported pull_request action:", action)
