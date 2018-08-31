@@ -100,6 +100,11 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		}
 
 		for _, pr := range e.CheckSuite.PullRequests {
+			if !s.isAllowedPullRequest(pr, e.GetAction()) {
+				log.Printf("User is not allowed for PR %d", pr.GetID())
+				c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
+				return
+			}
 			prIDs = append(prIDs, pr.GetID())
 		}
 
@@ -125,6 +130,11 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		}
 
 		for _, pr := range e.CheckRun.PullRequests {
+			if !s.isAllowedPullRequest(pr, e.GetAction()) {
+				log.Printf("User is not allowed for PR %d", pr.GetID())
+				c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
+				return
+			}
 			prIDs = append(prIDs, pr.GetID())
 		}
 
@@ -218,7 +228,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		rev.Commit = e.HeadCommit.GetID()
 		rev.Ref = e.GetRef()
 	case *github.PullRequestEvent:
-		if !s.isAllowedPullRequest(e) {
+		if !s.isAllowedPullRequest(e.GetPullRequest(), e.GetAction()) {
 			c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
 			return
 		}
@@ -279,22 +289,22 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 
 // isAllowedPullRequest returns true if this particular pull request is allowed
 // to produce an event.
-func (s *githubHook) isAllowedPullRequest(e *github.PullRequestEvent) bool {
+func (s *githubHook) isAllowedPullRequest(pr *github.PullRequest, action string) bool {
 
-	isFork := e.PullRequest.Head.Repo.GetFork()
+	isFork := pr.Head.Repo.GetFork()
 
 	// This applies the author association to forked PRs.
 	// PRs sent against origin will be accepted without a check.
 	// See https://developer.github.com/v4/reference/enum/commentauthorassociation/
-	if assoc := e.PullRequest.GetAuthorAssociation(); isFork && !s.isAllowedAuthor(assoc) {
+	if assoc := pr.GetAuthorAssociation(); isFork && !s.isAllowedAuthor(assoc) {
 		log.Printf("skipping pull request for disallowed author %s", assoc)
 		return false
 	}
-	switch e.GetAction() {
+	switch action {
 	case "opened", "synchronize", "reopened", "labeled", "unlabeled", "closed":
 		return true
 	}
-	log.Println("unsupported pull_request action:", e.GetAction())
+	log.Println("unsupported pull_request action:", action)
 	return false
 }
 
