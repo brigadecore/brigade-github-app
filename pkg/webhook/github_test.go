@@ -166,6 +166,7 @@ func TestGithubHandler(t *testing.T) {
 				t.Fatalf("failed to create request: %s", err)
 			}
 			r.Header.Add("X-GitHub-Event", tt.event)
+			r.Header.Add("X-Hub-Signature", SHA1HMAC([]byte("asdf"), payload))
 
 			ctx, _ := gin.CreateTestContext(w)
 			ctx.Request = r
