@@ -138,6 +138,17 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		return
 	}
 
+	if proj.SharedSecret == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
+		return
+	}
+
+	signature := c.Request.Header.Get(hubSignatureHeader)
+	if err := validateSignature(signature, proj.SharedSecret, body); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
+		return
+	}
+
 	tok, timeout, err := s.installationToken(res.AppID, res.InstID, proj.Github)
 	if err != nil {
 		log.Printf("Failed to negotiate a token: %s", err)
@@ -250,6 +261,17 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 	if err != nil {
 		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
 		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
+		return
+	}
+
+	if proj.SharedSecret == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
+		return
+	}
+
+	signature := c.Request.Header.Get(hubSignatureHeader)
+	if err := validateSignature(signature, proj.SharedSecret, body); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
 		return
 	}
 
