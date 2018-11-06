@@ -65,6 +65,10 @@ func main() {
 		log.Printf("Forked PRs will be built for roles %s", strings.Join(allowedAuthors, " | "))
 	}
 
+	ghOpts := webhook.GithubOpts{
+		CheckSuiteOnPR: true,
+	}
+
 	clientset, err := kube.GetClient(master, kubeconfig)
 	if err != nil {
 		log.Fatal(err)
@@ -78,7 +82,7 @@ func main() {
 	events := router.Group("/events")
 	{
 		events.Use(gin.Logger())
-		events.POST("/github", webhook.NewGithubHook(store, allowedAuthors, key))
+		events.POST("/github", webhook.NewGithubHook(store, allowedAuthors, key, ghOpts))
 	}
 
 	router.GET("/healthz", healthz)

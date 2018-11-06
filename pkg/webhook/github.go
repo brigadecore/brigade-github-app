@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/google/go-github/github"
 	"gopkg.in/gin-gonic/gin.v1"
@@ -25,9 +27,16 @@ type githubHook struct {
 	store          storage.Store
 	getFile        fileGetter
 	createStatus   statusCreator
+	opts           GithubOpts
 	allowedAuthors []string
 	// key is the x509 certificate key as ASCII-armored (PEM) data
 	key []byte
+}
+
+// GithubOpts provides options for configuring a GitHub hook
+type GithubOpts struct {
+	// CheckSuiteOnPR will trigger a check suite run for new PRs that pass the security params.
+	CheckSuiteOnPR bool
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -35,7 +44,7 @@ type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
 type statusCreator func(commit string, proj *brigade.Project, status *github.RepoStatus) error
 
 // NewGithubHook creates a GitHub webhook handler.
-func NewGithubHook(s storage.Store, authors []string, x509Key []byte) gin.HandlerFunc {
+func NewGithubHook(s storage.Store, authors []string, x509Key []byte, opts GithubOpts) gin.HandlerFunc {
 	gh := &githubHook{
 		store:          s,
 		getFile:        getFileFromGithub,
@@ -208,6 +217,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.HeadCommit.GetID()
 		rev.Ref = e.GetRef()
+
 	case *github.PullRequestEvent:
 		if !s.isAllowedPullRequest(e) {
 			c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
@@ -273,6 +283,37 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 	if err := validateSignature(signature, proj.SharedSecret, body); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
 		return
+	}
+
+	// If CheckSuiteOnPR is set, this will create a new check suite request.
+	if eventType == "pull_request" && s.opts.CheckSuiteOnPR {
+		client, err := ghClient(proj.Github)
+		if err != nil {
+			log.Printf("Failed to create GitHub client: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "cannot contact github upstream"})
+			return
+		}
+
+		projectNames := strings.Split(proj.Repo.Name, "/")
+		if len(projectNames) != 3 {
+			log.Printf("Repo %q is invalid. Should be github.com/ORG/NAME.", repo)
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "invalid repo name"})
+			return
+		}
+		cs, _, err := client.Checks.CreateCheckSuite(context.Background(), projectNames[1], repo, github.CreateCheckSuiteOptions{
+			HeadBranch: &rev.Ref,
+			HeadSHA:    rev.Commit,
+		})
+		if err != nil {
+			log.Printf("Failed to create check suite: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "could not create check suite"})
+			return
+		}
+
+		// There is a possibility that we may need to send a checksum request call, but the GitHub
+		// Go API does not have this call for some reason.
+
+		log.Printf("Check suite %d created", cs.GetID())
 	}
 
 	s.build(eventType, rev, body, proj)
