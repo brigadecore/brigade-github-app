@@ -101,7 +101,7 @@ to use the IP address directly.
 
 ### 4. Test the App from GitHub
 
-Go to the _Advanced_ tab and chck out the _Recent Deliveries_ section. This should
+Go to the _Advanced_ tab and check out the _Recent Deliveries_ section. This should
 show a successful test run. If it is not successful, you will need to troubleshoot
 why GitHub could not successfully contact your app.
 
@@ -124,7 +124,7 @@ _Only select repositories_, and click _Install_
 
 ### 6. Add Brigade projects for each GitHub project
 
-For each GitHub project that you enabled teh app for, you will now need to
+For each GitHub project that you enabled the app for, you will now need to
 create a Project.
 
 Remember that projects contain secret data, and should be handled with care.
@@ -141,9 +141,29 @@ You will want to make sure to set:
 - `sharedSecret` to use the shared secret you created when creating the app
 - `github.token` (aka `github: {token: }`) to the OAuth token GitHub Apps gave you
 
+## 7. (OPTIONAL): Forwarding `pull_request` to `check_suite`
+
+This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled bu default. To disable
+this feature, set the environment variable `CHECK_SUITE_ON_PR=0` on the deployment for the server. TODO: add this to chart.
+
+To forward a pull request (`pull_request`) to a check suite run, you will need to set two additional configurations for the gateway:
+
+```
+app_id: APP_ID
+installation_id: INSTALLATION_ID
+```
+
+`APP_ID` is the ID for your GitHub Brigade App instance, and `INSTALLATION_ID` is the installation ID for your GitHub Brigade App.
+
+When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
+
+You can get this information from... where?
+
+In the future, we will make this an explicitly toggle-able parameter.
+
 ## Handling Events in `brigade.js`
 
-This gateway behaves differently than the gateway that shipws with Brigade.
+This gateway behaves differently than the gateway that ships with Brigade.
 Because this is a GitHub App, an authentication token is generated for each
 request on-the-fly. And each token is only good for 60 minutes.
 

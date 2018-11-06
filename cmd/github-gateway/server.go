@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	gin "gopkg.in/gin-gonic/gin.v1"
@@ -65,8 +66,24 @@ func main() {
 		log.Printf("Forked PRs will be built for roles %s", strings.Join(allowedAuthors, " | "))
 	}
 
+	envOrInt := func(env string, defaultVal int) int {
+		aa, ok := os.LookupEnv(env)
+		if !ok {
+			return defaultVal
+		}
+
+		realVal, err := strconv.Atoi(aa)
+		if err != nil {
+			return defaultVal
+		}
+		return realVal
+	}
+
+	csopr := envOrInt("CHECK_SUITE_ON_PR", 1) == 1
 	ghOpts := webhook.GithubOpts{
-		CheckSuiteOnPR: true,
+		CheckSuiteOnPR: csopr,
+		AppID:          envOrInt("APP_ID", 0),          //20265,
+		InstallationID: envOrInt("INSTALLATION_ID", 0), //435243,
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)
@@ -83,6 +100,7 @@ func main() {
 	{
 		events.Use(gin.Logger())
 		events.POST("/github", webhook.NewGithubHook(store, allowedAuthors, key, ghOpts))
+		events.POST("/github/:app/:inst", webhook.NewGithubHook(store, allowedAuthors, key, ghOpts))
 	}
 
 	router.GET("/healthz", healthz)
