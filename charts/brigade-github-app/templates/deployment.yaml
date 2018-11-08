@@ -34,6 +34,12 @@ spec:
             value: {{ if .Values.gateway.allowedAuthorRoles }}{{ join "," .Values.gateway.allowedAuthorRoles | quote }}{{ end }}
           - name: GATEWAY_CONFIG
             value: "/etc/brigade-github-app/key.pem"
+          - name: APP_ID
+            value: "{{ .Values.github.appID }}"
+          - name: INSTALLATION_ID
+            value: "{{ .Values.github.installationID }}"
+          - name: CHECK_SUITE_ON_PR
+            value: "{{ .Values.github.checkSuiteOnPR }}"
         volumeMounts:
           - name: github-config
             mountPath: /etc/brigade-github-app
