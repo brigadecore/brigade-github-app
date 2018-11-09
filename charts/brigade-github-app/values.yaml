@@ -3,7 +3,7 @@ rbac:
   enabled: false
 
 # Image configuration
-registry: technosophos
+registry: deis
 name: brigade-github-app
 tag: latest
 pullPolicy: "Always"

@@ -1,6 +1,6 @@
 [[constraint]]
   name = "github.com/google/go-github"
-  version = "v16.0.0"
+  version = "v18.2.0"
 
 [[constraint]]
   name = "github.com/gosuri/uitable"

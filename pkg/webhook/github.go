@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/google/go-github/github"
 	"gopkg.in/gin-gonic/gin.v1"
@@ -21,13 +23,27 @@ const (
 	hubSignatureHeader = "X-Hub-Signature"
 )
 
+// ErrAuthFailed indicates some part of the auth handshake failed
+//
+// This is usually indicative of an auth failure between the client library and GitHub
+var ErrAuthFailed = errors.New("Auth Failed")
+
 type githubHook struct {
 	store          storage.Store
 	getFile        fileGetter
 	createStatus   statusCreator
+	opts           GithubOpts
 	allowedAuthors []string
 	// key is the x509 certificate key as ASCII-armored (PEM) data
 	key []byte
+}
+
+// GithubOpts provides options for configuring a GitHub hook
+type GithubOpts struct {
+	// CheckSuiteOnPR will trigger a check suite run for new PRs that pass the security params.
+	CheckSuiteOnPR bool
+	AppID          int
+	InstallationID int
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -35,13 +51,14 @@ type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
 type statusCreator func(commit string, proj *brigade.Project, status *github.RepoStatus) error
 
 // NewGithubHook creates a GitHub webhook handler.
-func NewGithubHook(s storage.Store, authors []string, x509Key []byte) gin.HandlerFunc {
+func NewGithubHook(s storage.Store, authors []string, x509Key []byte, opts GithubOpts) gin.HandlerFunc {
 	gh := &githubHook{
 		store:          s,
 		getFile:        getFileFromGithub,
 		createStatus:   setRepoStatus,
 		allowedAuthors: authors,
 		key:            x509Key,
+		opts:           opts,
 	}
 	return gh.Handle
 }
@@ -99,16 +116,25 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 		res = &Payload{
 			Body:   e,
-			AppID:  int(*e.CheckSuite.App.ID),
-			InstID: int(*e.Installation.ID),
+			AppID:  int(e.CheckSuite.App.GetID()),
+			InstID: int(e.Installation.GetID()),
 			Type:   "check_suite",
 		}
 
+		if res.AppID != s.opts.AppID {
+			log.Printf("This was destined for app %d, not us (%d)", res.AppID, s.opts.AppID)
+			return
+		}
+
 		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
-		brigEvent = fmt.Sprintf("%s:%s", eventType, *e.Action)
-		repo = *e.Repo.FullName
-		rev.Commit = *e.CheckSuite.HeadSHA
-		rev.Ref = fmt.Sprintf("refs/heads/%s", *e.CheckSuite.HeadBranch)
+		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
+		repo = e.Repo.GetFullName()
+		rev.Commit = e.CheckSuite.GetHeadSHA()
+		headbranch := e.CheckSuite.GetHeadBranch()
+		if headbranch != "" {
+			rev.Ref = fmt.Sprintf("refs/heads/%s", headbranch)
+		}
+
 	case "check_run":
 		e := &github.CheckRunEvent{}
 		err := json.Unmarshal(body, e)
@@ -120,15 +146,27 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 		res = &Payload{
 			Body:   e,
-			AppID:  int(*e.CheckRun.App.ID),
-			InstID: int(*e.Installation.ID),
+			AppID:  int(e.CheckRun.App.GetID()),
+			InstID: int(e.Installation.GetID()),
 			Type:   "check_run",
 		}
 
-		brigEvent = fmt.Sprintf("%s:%s", eventType, *e.Action)
-		repo = *e.Repo.FullName
-		rev.Commit = *e.CheckRun.HeadSHA
-		rev.Ref = fmt.Sprintf("refs/heads/%s", *e.CheckRun.CheckSuite.HeadBranch)
+		if res.AppID == 0 {
+			res.AppID = int(e.CheckRun.CheckSuite.App.GetID())
+		}
+
+		if res.AppID != s.opts.AppID {
+			log.Printf("This was destined for app %d, not us (%d)", res.AppID, s.opts.AppID)
+			return
+		}
+
+		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
+		repo = e.Repo.GetFullName()
+		rev.Commit = e.CheckRun.CheckSuite.GetHeadSHA()
+		headbranch := e.CheckRun.CheckSuite.GetHeadBranch()
+		if headbranch != "" {
+			rev.Ref = fmt.Sprintf("refs/heads/%s", headbranch)
+		}
 	}
 
 	proj, err := s.store.GetProject(repo)
@@ -152,7 +190,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 	tok, timeout, err := s.installationToken(res.AppID, res.InstID, proj.Github)
 	if err != nil {
 		log.Printf("Failed to negotiate a token: %s", err)
-		c.JSON(http.StatusForbidden, gin.H{"status": "Auth Failed"})
+		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
 		return
 	}
 	res.Token = tok
@@ -196,6 +234,8 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 
 	var repo string
 	var rev brigade.Revision
+	// Used only for check suite
+	var pre *github.PullRequestEvent
 
 	switch e := e.(type) {
 	case *github.PushEvent:
@@ -204,7 +244,6 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 			c.JSON(http.StatusOK, gin.H{"status": "build skipped on branch deletion"})
 			return
 		}
-
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.HeadCommit.GetID()
 		rev.Ref = e.GetRef()
@@ -213,6 +252,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 			c.JSON(http.StatusOK, gin.H{"status": "build skipped"})
 			return
 		}
+		pre = e
 
 		// EXPERIMENTAL: Since labeling and unlabeling PRs doesn't really have a
 		// code impact, we don't really want to fire off the same event (or require
@@ -275,8 +315,101 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		return
 	}
 
+	// If s.opts.CheckSuiteOnPR is set, this will create a new check suite request.
+	if eventType == "pull_request" && s.opts.CheckSuiteOnPR {
+		if err := s.prToCheckSuite(c, pre, proj); err != nil {
+			if err == ErrAuthFailed {
+				c.JSON(http.StatusForbidden, gin.H{"status": err.Error()})
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"status": err.Error()})
+			return
+		}
+		// TODO: do we return here (e.g. stop the PR hook) if we get to this point
+	}
+
 	s.build(eventType, rev, body, proj)
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
+}
+
+// prToCheckSuite creates a new check suite and rerequests it based on a pull request.
+//
+// The Check Suite webhook events are normally only triggered on `push` events. This function acts as an
+// adapter to take a PR and trigger a check suite.
+//
+// The GitHub API is still evolving, so the current way we do this is...
+//
+//	- generate auth tokens for the instance/app combo. This is required to perform the action as a
+//		GitHub app
+//	- try to create a check_suite
+//		- if success, run a `rerequest` on this check suite because merely creating a check suite does
+// 		  not actually trigger a check_suite:requested webhook event
+//		- if failure, check to see if we already have a check suite object, and merely run the rerequest
+//		  on that check suite.
+func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent, proj *brigade.Project) error {
+	repo := pre.Repo.GetFullName()
+	ref := pre.PullRequest.Head.GetRef()
+	sha := pre.PullRequest.Head.GetSHA()
+	appID := s.opts.AppID
+	instID := s.opts.InstallationID
+
+	if appID == 0 || instID == 0 {
+		log.Printf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
+		return ErrAuthFailed
+	}
+
+	tok, _, err := s.installationToken(int(appID), int(instID), proj.Github)
+	if err != nil {
+		log.Printf("Failed to negotiate a token: %s", err)
+		return ErrAuthFailed
+	}
+	client, err := InstallationTokenClient(tok, proj.Github.BaseURL, proj.Github.UploadURL)
+	if err != nil {
+		log.Printf("Failed to create a new installation token client: %s", err)
+		return ErrAuthFailed
+	}
+
+	projectNames := strings.Split(repo, "/")
+	if len(projectNames) != 2 {
+		log.Printf("Repo %q is invalid. Should be github.com/ORG/NAME.", repo)
+		return errors.New("invalid repo name")
+	}
+	owner, pname := projectNames[0], projectNames[1]
+	csOpts := github.CreateCheckSuiteOptions{
+		HeadSHA:    sha,
+		HeadBranch: &ref,
+	}
+	log.Printf("requesting check suite run for %s/%s, SHA: %s", owner, pname, csOpts.HeadSHA)
+
+	cs, res, err := client.Checks.CreateCheckSuite(context.Background(), owner, pname, csOpts)
+	if err != nil {
+		log.Printf("Failed to create check suite: %s", err)
+
+		// 422 means the suite already exists.
+		if res.StatusCode != 422 {
+			return errors.New("could not create check suite")
+		}
+
+		log.Println("rerunning the last suite")
+		csl, _, err := client.Checks.ListCheckSuitesForRef(context.Background(), owner, pname, sha, &github.ListCheckSuiteOptions{
+			AppID: &s.opts.AppID,
+		})
+		if err == nil && csl.GetTotal() > 0 {
+			log.Printf("Loading check suite %d", csl.CheckSuites[0].GetID())
+			_, err := client.Checks.ReRequestCheckSuite(context.Background(), owner, pname, csl.CheckSuites[0].GetID())
+			if err != nil {
+				log.Printf("error rerunning suite: %s", err)
+			}
+		} else {
+			log.Printf("error fetching check suites: %s", err)
+		}
+		return nil
+	}
+
+	log.Printf("Created check suite for %s with ID %d. Triggering :rerequested", ref, cs.GetID())
+	// It appears that merely creating the check suite does not trigger a check_suite:request.
+	// So we manually trigger a rerequest.
+	_, err = client.Checks.ReRequestCheckSuite(context.Background(), owner, pname, cs.GetID())
+	return err
 }
 
 // isAllowedPullRequest returns true if this particular pull request is allowed
