@@ -333,7 +333,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 
 // prToCheckSuite creates a new check suite and rerequests it based on a pull request.
 //
-// The Check Suite webhook events are normally only trigger on `push` events. This function acts as an
+// The Check Suite webhook events are normally only triggered on `push` events. This function acts as an
 // adapter to take a PR and trigger a check suite.
 //
 // The GitHub API is still evolving, so the current way we do this is...
@@ -349,8 +349,8 @@ func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent
 	repo := pre.Repo.GetFullName()
 	ref := pre.PullRequest.Head.GetRef()
 	sha := pre.PullRequest.Head.GetSHA()
-	appID := s.opts.AppID           //pre.Installation.GetAppID()
-	instID := s.opts.InstallationID //pre.Installation.GetID()
+	appID := s.opts.AppID
+	instID := s.opts.InstallationID
 
 	if appID == 0 || instID == 0 {
 		log.Printf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)

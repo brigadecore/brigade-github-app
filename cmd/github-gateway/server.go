@@ -82,8 +82,8 @@ func main() {
 	csopr := envOrInt("CHECK_SUITE_ON_PR", 1) == 1
 	ghOpts := webhook.GithubOpts{
 		CheckSuiteOnPR: csopr,
-		AppID:          envOrInt("APP_ID", 0),          //20265,
-		InstallationID: envOrInt("INSTALLATION_ID", 0), //435243,
+		AppID:          envOrInt("APP_ID", 0),
+		InstallationID: envOrInt("INSTALLATION_ID", 0),
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)

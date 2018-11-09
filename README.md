@@ -143,7 +143,7 @@ You will want to make sure to set:
 
 ## 7. (OPTIONAL): Forwarding `pull_request` to `check_suite`
 
-This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled bu default. To disable
+This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled by default. To disable
 this feature, set the environment variable `CHECK_SUITE_ON_PR=0` on the deployment for the server. TODO: add this to chart.
 
 To forward a pull request (`pull_request`) to a check suite run, you will need to set two additional configurations for the gateway:
@@ -157,7 +157,7 @@ installation_id: INSTALLATION_ID
 
 When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
 
-You can get this information from... where?
+TODO: Add info on where to get App ID and Installation ID.
 
 In the future, we will make this an explicitly toggle-able parameter.
 
@@ -212,7 +212,7 @@ run complete. On error, it marks the run failed.
 
 ```javascript
 const {events, Job, Group} = require("brigadier");
-const checkRunImage = "technosophos/brigade-github-check-run:latest"
+const checkRunImage = "deis/brigade-github-check-run:latest"
 
 events.on("check_suite:requested", checkRequested)
 events.on("check_suite:rerequested", checkRequested)
