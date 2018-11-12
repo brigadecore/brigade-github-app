@@ -155,9 +155,11 @@ installation_id: INSTALLATION_ID
 
 `APP_ID` is the ID for your GitHub Brigade App instance, and `INSTALLATION_ID` is the installation ID for your GitHub Brigade App.
 
-When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
+These are provided after the GitHub App Installation on GitHub (see 1. Create a GitHub App).
+* For the `APP_ID` see `https://github.com/settings/apps/your-app-name`
+* For the `INSTALLATION_ID` go to `https://github.com/settings/apps/your-app-name/installations`. Click on the desired installation to get the id within the URL: `https://github.com/settings/installations/1234567`
 
-TODO: Add info on where to get App ID and Installation ID.
+When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
 
 In the future, we will make this an explicitly toggle-able parameter.
 
