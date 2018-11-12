@@ -157,7 +157,7 @@ installation_id: INSTALLATION_ID
 
 These are provided after the GitHub App Installation on GitHub (see 1. Create a GitHub App).
 * For the `APP_ID` see `https://github.com/settings/apps/your-app-name`
-* For the `INSTALLATION_ID` go to `https://github.com/settings/apps/your-app-name/installations`. Klick on the desired installation to get the id within the URL: `https://github.com/settings/installations/1234567`
+* For the `INSTALLATION_ID` go to `https://github.com/settings/apps/your-app-name/installations`. Click on the desired installation to get the id within the URL: `https://github.com/settings/installations/1234567`
 
 When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
 
