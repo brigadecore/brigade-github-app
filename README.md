@@ -308,14 +308,11 @@ To build from source:
 
 ```console
 $ dep ensure         # to install dependencies into vendor/
+$ make lint          # to run linters
 $ make test          # to run tests
-$ make build         # to build local
-$ make docker-build  # to build a Docker image
+$ make build         # to build local binaries
+$ make docker-build  # to build Docker images
 ```
-
-## TODO
-
-- [ ] Move images to correct Docker repo
 
 # Contributing
 
