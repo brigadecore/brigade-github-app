@@ -42,3 +42,12 @@ github:
   # The x509 PEM-formatted keyfile GitHub issued for you App.
   key: |
     REQUIRED: Your key goes here.
+  # This represents the unique ID for a GitHub App
+  # The value can be retrieved from the main App page or any inbound webhook payloads
+  appID:
+  # This represents the installation for the GitHub App
+  # The value can be retrieved from inbound webhook payloads for the given App
+  installationID:
+  # Trigger a Check Suite on Pull Requests
+  # This will need to be set to true to enable running Check Suites on PRs originating from forks
+  checkSuiteOnPR: true
