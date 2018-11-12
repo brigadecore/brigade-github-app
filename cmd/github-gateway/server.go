@@ -66,6 +66,20 @@ func main() {
 		log.Printf("Forked PRs will be built for roles %s", strings.Join(allowedAuthors, " | "))
 	}
 
+	envOrBool := func(env string, defaultVal bool) bool {
+		s, ok := os.LookupEnv(env)
+		if !ok {
+			return defaultVal
+		}
+
+		realVal, err := strconv.ParseBool(s)
+		if err != nil {
+			return defaultVal
+		}
+
+		return realVal
+	}
+
 	envOrInt := func(env string, defaultVal int) int {
 		aa, ok := os.LookupEnv(env)
 		if !ok {
@@ -79,9 +93,8 @@ func main() {
 		return realVal
 	}
 
-	csopr := envOrInt("CHECK_SUITE_ON_PR", 1) == 1
 	ghOpts := webhook.GithubOpts{
-		CheckSuiteOnPR: csopr,
+		CheckSuiteOnPR: envOrBool("CHECK_SUITE_ON_PR", true),
 		AppID:          envOrInt("APP_ID", 0),
 		InstallationID: envOrInt("INSTALLATION_ID", 0),
 	}

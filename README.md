@@ -145,7 +145,7 @@ You will want to make sure to set:
 
 This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled by default.
 
-To disable this feature, set the environment variable `CHECK_SUITE_ON_PR=0` on the deployment for the server.
+To disable this feature, set the environment variable `CHECK_SUITE_ON_PR=false` on the deployment for the server.
 This can also be done by setting `github.checkSuiteOnPR` to `false` in the chart's `values.yaml`.
 
 To forward a pull request (`pull_request`) to a check suite run, you will need to set two additional configurations for the gateway.
