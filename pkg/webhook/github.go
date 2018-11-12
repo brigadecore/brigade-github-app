@@ -130,10 +130,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.CheckSuite.GetHeadSHA()
-		headbranch := e.CheckSuite.GetHeadBranch()
-		if headbranch != "" {
-			rev.Ref = fmt.Sprintf("refs/heads/%s", headbranch)
-		}
+		rev.Ref = e.CheckSuite.GetHeadBranch()
 
 	case "check_run":
 		e := &github.CheckRunEvent{}
@@ -163,10 +160,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.CheckRun.CheckSuite.GetHeadSHA()
-		headbranch := e.CheckRun.CheckSuite.GetHeadBranch()
-		if headbranch != "" {
-			rev.Ref = fmt.Sprintf("refs/heads/%s", headbranch)
-		}
+		rev.Ref = e.CheckRun.CheckSuite.GetHeadBranch()
 	}
 
 	proj, err := s.store.GetProject(repo)
@@ -347,7 +341,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 //		  on that check suite.
 func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent, proj *brigade.Project) error {
 	repo := pre.Repo.GetFullName()
-	ref := pre.PullRequest.Head.GetRef()
+	ref := fmt.Sprintf("refs/pull/%d/head", pre.PullRequest.GetNumber())
 	sha := pre.PullRequest.Head.GetSHA()
 	appID := s.opts.AppID
 	instID := s.opts.InstallationID
