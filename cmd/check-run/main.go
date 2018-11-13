@@ -105,17 +105,17 @@ func repoCommitBranch(payload *webhook.Payload) (string, string, string, error) 
 		if err = json.Unmarshal(tmp, event); err != nil {
 			return repo, commit, branch, err
 		}
-		repo = *event.Repo.FullName
-		commit = *event.CheckRun.CheckSuite.HeadSHA
-		branch = *event.CheckRun.CheckSuite.HeadBranch
+		repo = event.Repo.GetFullName()
+		commit = event.CheckRun.CheckSuite.GetHeadSHA()
+		branch = event.CheckRun.CheckSuite.GetHeadBranch()
 	case "check_suite":
 		event := &github.CheckSuiteEvent{}
 		if err = json.Unmarshal(tmp, event); err != nil {
 			return repo, commit, branch, err
 		}
-		repo = *event.Repo.FullName
-		commit = *event.CheckSuite.HeadSHA
-		branch = *event.CheckSuite.HeadBranch
+		repo = event.Repo.GetFullName()
+		commit = event.CheckSuite.GetHeadSHA()
+		branch = event.CheckSuite.GetHeadBranch()
 	default:
 		return repo, commit, branch, fmt.Errorf("unknown payload type %s", payload.Type)
 	}
