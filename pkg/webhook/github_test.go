@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -266,9 +265,4 @@ func TestTruncAt(t *testing.T) {
 	if got := truncAt("foobar1", 6); got != "foo..." {
 		t.Errorf("Unexpected truncation of foobar1: %s", got)
 	}
-}
-
-// failingFileGet is a `fileGetter` which is useful for simulating a situation that the project repository to contain no file
-func failingFileGet(commit, path string, proj *brigade.Project) ([]byte, error) {
-	return []byte{}, fmt.Errorf("simulated \"missing file\" error for commit=%s, path=%s, proj.name=%s", commit, path, proj.Name)
 }

@@ -18,10 +18,7 @@ import (
 	"github.com/Azure/brigade/pkg/storage"
 )
 
-const (
-	brigadeJSFile      = "brigade.js"
-	hubSignatureHeader = "X-Hub-Signature"
-)
+const hubSignatureHeader = "X-Hub-Signature"
 
 // ErrAuthFailed indicates some part of the auth handshake failed
 //

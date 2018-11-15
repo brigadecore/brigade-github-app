@@ -32,8 +32,7 @@ function build(e, project) {
     `cp -a /src/.git ${localPath}`,
     `cd ${localPath}`,
     "make bootstrap",
-    // TODO: address linting errors, enable
-    // "make lint",
+    "make lint",
     "make test"
   ];
 
@@ -42,7 +41,7 @@ function build(e, project) {
 
 function goDockerBuild(project, tag) {
   // We build in a separate pod b/c AKS's Docker is too old to do multi-stage builds.
-  const goBuild = new Job(`${projectName}-build`, goImg);
+  const goBuild = new Job(`${projectName}-docker-build`, goImg);
 
   goBuild.storage.enabled = true;
   goBuild.env = {
@@ -54,7 +53,6 @@ function goDockerBuild(project, tag) {
     `mkdir -p ${localPath}/bin`,
     `mv /src/* ${localPath}`,
     `cd ${localPath}`,
-    "make bootstrap",
     "make build-docker-bins",
     // create share and copy binaries, for use by the dockerhubPublish job
     `mkdir -p /mnt/brigade/share/rootfs`,
