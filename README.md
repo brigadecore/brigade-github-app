@@ -148,21 +148,16 @@ This gateway can enable a feature that converts PRs to Check Suite requests. Cur
 To disable this feature, set the environment variable `CHECK_SUITE_ON_PR=false` on the deployment for the server.
 This can also be done by setting `github.checkSuiteOnPR` to `false` in the chart's `values.yaml`.
 
-To forward a pull request (`pull_request`) to a check suite run, you will need to set two additional configurations for the gateway.
+To forward a pull request (`pull_request`) to a check suite run, you will need to provide the ID for your GitHub Brigade App instance.
 (Here also set at the chart-level via `values.yaml`):
 
 ```
 github:
 ...
   appID: APP_ID
-  installationID: INSTALLATION_ID
 ```
 
-`APP_ID` is the ID for your GitHub Brigade App instance, and `INSTALLATION_ID` is the installation ID for your GitHub Brigade App.
-
-These are provided after the GitHub App Installation on GitHub (see 1. Create a GitHub App).
-* For the `APP_ID` see `https://github.com/settings/apps/your-app-name`
-* For the `INSTALLATION_ID` go to `https://github.com/settings/apps/your-app-name/installations`. Click on the desired installation to get the id within the URL: `https://github.com/settings/installations/1234567`
+This value is provided after the GitHub App is created on GitHub (see 1. Create a GitHub App). To find this value after creation, visit `https://github.com/settings/apps/your-app-name`.
 
 When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
 

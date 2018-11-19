@@ -96,7 +96,6 @@ func main() {
 	ghOpts := webhook.GithubOpts{
 		CheckSuiteOnPR: envOrBool("CHECK_SUITE_ON_PR", true),
 		AppID:          envOrInt("APP_ID", 0),
-		InstallationID: envOrInt("INSTALLATION_ID", 0),
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)

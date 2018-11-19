@@ -40,7 +40,6 @@ type GithubOpts struct {
 	// CheckSuiteOnPR will trigger a check suite run for new PRs that pass the security params.
 	CheckSuiteOnPR bool
 	AppID          int
-	InstallationID int
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -341,7 +340,7 @@ func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent
 	ref := fmt.Sprintf("refs/pull/%d/head", pre.PullRequest.GetNumber())
 	sha := pre.PullRequest.Head.GetSHA()
 	appID := s.opts.AppID
-	instID := s.opts.InstallationID
+	instID := pre.Installation.GetID()
 
 	if appID == 0 || instID == 0 {
 		log.Printf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
