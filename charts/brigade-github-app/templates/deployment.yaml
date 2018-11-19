@@ -36,8 +36,6 @@ spec:
             value: "/etc/brigade-github-app/key.pem"
           - name: APP_ID
             value: "{{ .Values.github.appID }}"
-          - name: INSTALLATION_ID
-            value: "{{ .Values.github.installationID }}"
           - name: CHECK_SUITE_ON_PR
             value: "{{ .Values.github.checkSuiteOnPR }}"
         volumeMounts:
