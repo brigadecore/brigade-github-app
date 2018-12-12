@@ -51,20 +51,23 @@ https://developer.github.com/apps/building-github-apps/creating-a-github-app/
 one and save it locally. You will put this in your `values.yaml` file in the next
 step.
 
-### 2. Install the chart into your cluster
+### 2. Install the Helm chart into your cluster
+
+The [Brigade Github App Helm Chart][brigade-github-app-chart] is hosted at the
+[Azure/brigade-charts][brigade-charts] repository.
 
 You must install this gateway into the same namespace in your cluster where
-Brigade is already running
+Brigade is already running.
 
 **Make sure the gateway is accessibly on a public IP address**. You can do that
 either by setting the Service to be a load balancer, or setting up the Ingress. We
 STRONGLY recommend setting up an ingress to use Kube-LEGO or another SSL proxy.
 
 ```
-$ cd brigade-github
-$ helm inspect values ./charts/brigade-github-app > values.yaml
+$ helm repo add brigade https://azure.github.io/brigade-charts
+$ helm inspect values brigade/brigade-github-app > values.yaml
 $ # Edit values.yaml
-$ helm install -n gh-app ./charts/brigade-github-app
+$ helm install -n gh-app brigade/brigade-github-app
 ```
 
 > The private key you created in Step 1 should be put in your `values.yaml` file:
@@ -322,3 +325,6 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+[brigade-charts]: https://github.com/Azure/brigade-charts
+[brigade-github-app-chart]: https://github.com/Azure/brigade-charts/tree/master/charts/brigade-github-app
