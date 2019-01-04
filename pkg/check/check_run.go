@@ -61,7 +61,7 @@ type Run struct {
 	// Queued is the default
 	Status string `json:"status,omitempty"`
 
-	// StartedAtt is an ISO 8601 date stamp, YYYY-MM-DDTHH:MM:SSZ
+	// StartedAt is an ISO 8601 date stamp, YYYY-MM-DDTHH:MM:SSZ
 	StartedAt string `json:"started_at,omitempty"`
 
 	// CompletedAt is an ISO 8601 date stamp, YYYY-MM-DDTHH:MM:SSZ
