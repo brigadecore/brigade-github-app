@@ -31,7 +31,7 @@ type Run struct {
 	// HeadSHA is the required commit ID
 	HeadSHA string `json:"head_sha"`
 
-	// Conclusion is the required cibcksion. It must be one of:
+	// Conclusion is the required conclusion. It must be one of:
 	//
 	//	- success
 	//	- failure
