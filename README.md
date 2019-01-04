@@ -47,7 +47,7 @@ https://developer.github.com/apps/building-github-apps/creating-a-github-app/
   - checks suite
 - Choose "Only This Account" to connect to the app.
 
-**Once you have submitted** you will be promted to create a private key. Create
+**Once you have submitted** you will be prompted to create a private key. Create
 one and save it locally. You will put this in your `values.yaml` file in the next
 step.
 
