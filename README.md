@@ -37,10 +37,10 @@ https://developer.github.com/apps/building-github-apps/creating-a-github-app/
 - Set the _Webhook Secret_ to a randomly generated string. Make note of that string
 - Subscribe to the following events:
   - Repository contents: read
-  - Issues: read (TODO: verify this)
+  - Issues: read
   - Repository metadata: read
   - Pull requests: read
-  - Repository webhooks: read (TODO: verify this)
+  - Repository webhooks: read
   - Commit Statuses: Read And Write
   - Checks: Read and Write
 - Subscribe to the following webhooks:
@@ -59,7 +59,7 @@ The [Brigade Github App Helm Chart][brigade-github-app-chart] is hosted at the
 You must install this gateway into the same namespace in your cluster where
 Brigade is already running.
 
-**Make sure the gateway is accessibly on a public IP address**. You can do that
+**Make sure the gateway is accessible on a public IP address**. You can do that
 either by setting the Service to be a load balancer, or setting up the Ingress. We
 STRONGLY recommend setting up an ingress to use Kube-LEGO or another SSL proxy.
 
@@ -132,7 +132,6 @@ create a Project.
 
 Remember that projects contain secret data, and should be handled with care.
 
-
 ```
 $ helm inspect values brigade/brigade-project > values.yaml
 $ # Edit values.yaml
@@ -182,7 +181,6 @@ looks like this:
     "...": "..."
   }
 }
-
 ```
 
 The above shows just the very top level of the object. The object you will
