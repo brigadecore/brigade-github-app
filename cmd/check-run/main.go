@@ -93,7 +93,7 @@ func main() {
 
 func repoCommitBranch(payload *webhook.Payload) (string, string, string, error) {
 	var repo, commit, branch string
-	// As ridiculous as this is, we have to remarshal the Body and unmartial it
+	// As ridiculous as this is, we have to remarshal the Body and unmarshal it
 	// into the right object.
 	tmp, err := json.Marshal(payload.Body)
 	if err != nil {
