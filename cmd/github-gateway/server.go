@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	gin "gopkg.in/gin-gonic/gin.v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/Azure/brigade/pkg/storage/kube"
 
