@@ -432,14 +432,6 @@ func (s *githubHook) isAllowedAuthor(author string) bool {
 	return false
 }
 
-func truncAt(str string, max int) string {
-	if len(str) > max {
-		short := str[0 : max-3]
-		return short + "..."
-	}
-	return str
-}
-
 func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, error) {
 	return GetFileContents(proj, commit, path)
 }
