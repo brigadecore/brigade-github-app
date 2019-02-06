@@ -31,7 +31,7 @@ type Run struct {
 	// HeadSHA is the required commit ID
 	HeadSHA string `json:"head_sha"`
 
-	// Conclusion is the required cibcksion. It must be one of:
+	// Conclusion is the required conclusion. It must be one of:
 	//
 	//	- success
 	//	- failure
@@ -61,7 +61,7 @@ type Run struct {
 	// Queued is the default
 	Status string `json:"status,omitempty"`
 
-	// StartedAtt is an ISO 8601 date stamp, YYYY-MM-DDTHH:MM:SSZ
+	// StartedAt is an ISO 8601 date stamp, YYYY-MM-DDTHH:MM:SSZ
 	StartedAt string `json:"started_at,omitempty"`
 
 	// CompletedAt is an ISO 8601 date stamp, YYYY-MM-DDTHH:MM:SSZ
@@ -80,7 +80,7 @@ type Output struct {
 	Summary string `json:"summary"`
 	// Text is the details
 	// Markdown allowed
-	Text string `json:"text",omitempty`
+	Text string `json:"text,omitempty"`
 
 	// Annotations is a list of annotations
 	Annotations []Annotation `json:"annotations,omitempty"`
@@ -105,5 +105,5 @@ type Annotation struct {
 type Image struct {
 	ImageURL string `json:"image_url"`
 	Alt      string `json:"alt"`
-	Caption  string `json:caption,omitempty"`
+	Caption  string `json:"caption,omitempty"`
 }

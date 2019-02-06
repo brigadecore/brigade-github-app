@@ -37,34 +37,37 @@ https://developer.github.com/apps/building-github-apps/creating-a-github-app/
 - Set the _Webhook Secret_ to a randomly generated string. Make note of that string
 - Subscribe to the following events:
   - Repository contents: read
-  - Issues: read (TODO: verify this)
+  - Issues: read
   - Repository metadata: read
   - Pull requests: read
-  - Repository webhooks: read (TODO: verify this)
+  - Repository webhooks: read
   - Commit Statuses: Read And Write
   - Checks: Read and Write
 - Subscribe to the following webhooks:
   - checks suite
 - Choose "Only This Account" to connect to the app.
 
-**Once you have submitted** you will be promted to create a private key. Create
+**Once you have submitted** you will be prompted to create a private key. Create
 one and save it locally. You will put this in your `values.yaml` file in the next
 step.
 
-### 2. Install the chart into your cluster
+### 2. Install the Helm chart into your cluster
+
+The [Brigade Github App Helm Chart][brigade-github-app-chart] is hosted at the
+[Azure/brigade-charts][brigade-charts] repository.
 
 You must install this gateway into the same namespace in your cluster where
-Brigade is already running
+Brigade is already running.
 
-**Make sure the gateway is accessibly on a public IP address**. You can do that
+**Make sure the gateway is accessible on a public IP address**. You can do that
 either by setting the Service to be a load balancer, or setting up the Ingress. We
 STRONGLY recommend setting up an ingress to use Kube-LEGO or another SSL proxy.
 
 ```
-$ cd brigade-github
-$ helm inspect values ./charts/brigade-github-app > values.yaml
+$ helm repo add brigade https://azure.github.io/brigade-charts
+$ helm inspect values brigade/brigade-github-app > values.yaml
 $ # Edit values.yaml
-$ helm install -n gh-app ./charts/brigade-github-app
+$ helm install -n gh-app brigade/brigade-github-app
 ```
 
 > The private key you created in Step 1 should be put in your `values.yaml` file:
@@ -129,7 +132,6 @@ create a Project.
 
 Remember that projects contain secret data, and should be handled with care.
 
-
 ```
 $ helm inspect values brigade/brigade-project > values.yaml
 $ # Edit values.yaml
@@ -143,23 +145,23 @@ You will want to make sure to set:
 
 ## 7. (OPTIONAL): Forwarding `pull_request` to `check_suite`
 
-This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled by default. To disable
-this feature, set the environment variable `CHECK_SUITE_ON_PR=0` on the deployment for the server. TODO: add this to chart.
+This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled by default.
 
-To forward a pull request (`pull_request`) to a check suite run, you will need to set two additional configurations for the gateway:
+To disable this feature, set the environment variable `CHECK_SUITE_ON_PR=false` on the deployment for the server.
+This can also be done by setting `github.checkSuiteOnPR` to `false` in the chart's `values.yaml`.
+
+To forward a pull request (`pull_request`) to a check suite run, you will need to provide the ID for your GitHub Brigade App instance.
+(Here also set at the chart-level via `values.yaml`):
 
 ```
-app_id: APP_ID
-installation_id: INSTALLATION_ID
+github:
+...
+  appID: APP_ID
 ```
 
-`APP_ID` is the ID for your GitHub Brigade App instance, and `INSTALLATION_ID` is the installation ID for your GitHub Brigade App.
+This value is provided after the GitHub App is created on GitHub (see 1. Create a GitHub App). To find this value after creation, visit `https://github.com/settings/apps/your-app-name`.
 
 When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
-
-TODO: Add info on where to get App ID and Installation ID.
-
-In the future, we will make this an explicitly toggle-able parameter.
 
 ## Handling Events in `brigade.js`
 
@@ -179,7 +181,6 @@ looks like this:
     "...": "..."
   }
 }
-
 ```
 
 The above shows just the very top level of the object. The object you will
@@ -303,14 +304,11 @@ To build from source:
 
 ```console
 $ dep ensure         # to install dependencies into vendor/
+$ make lint          # to run linters
 $ make test          # to run tests
-$ make build         # to build local
-$ make docker-build  # to build a Docker image
+$ make build         # to build local binaries
+$ make docker-build  # to build Docker images
 ```
-
-## TODO
-
-- [ ] Move images to correct Docker repo
 
 # Contributing
 
@@ -325,3 +323,6 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+[brigade-charts]: https://github.com/Azure/brigade-charts
+[brigade-github-app-chart]: https://github.com/Azure/brigade-charts/tree/master/charts/brigade-github-app

@@ -12,16 +12,13 @@ import (
 	"strings"
 
 	"github.com/google/go-github/github"
-	"gopkg.in/gin-gonic/gin.v1"
+	gin "gopkg.in/gin-gonic/gin.v1"
 
 	"github.com/Azure/brigade/pkg/brigade"
 	"github.com/Azure/brigade/pkg/storage"
 )
 
-const (
-	brigadeJSFile      = "brigade.js"
-	hubSignatureHeader = "X-Hub-Signature"
-)
+const hubSignatureHeader = "X-Hub-Signature"
 
 // ErrAuthFailed indicates some part of the auth handshake failed
 //
@@ -43,7 +40,6 @@ type GithubOpts struct {
 	// CheckSuiteOnPR will trigger a check suite run for new PRs that pass the security params.
 	CheckSuiteOnPR bool
 	AppID          int
-	InstallationID int
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -130,10 +126,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.CheckSuite.GetHeadSHA()
-		headbranch := e.CheckSuite.GetHeadBranch()
-		if headbranch != "" {
-			rev.Ref = fmt.Sprintf("refs/heads/%s", headbranch)
-		}
+		rev.Ref = e.CheckSuite.GetHeadBranch()
 
 	case "check_run":
 		e := &github.CheckRunEvent{}
@@ -163,10 +156,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.CheckRun.CheckSuite.GetHeadSHA()
-		headbranch := e.CheckRun.CheckSuite.GetHeadBranch()
-		if headbranch != "" {
-			rev.Ref = fmt.Sprintf("refs/heads/%s", headbranch)
-		}
+		rev.Ref = e.CheckRun.CheckSuite.GetHeadBranch()
 	}
 
 	proj, err := s.store.GetProject(repo)
@@ -347,10 +337,10 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 //		  on that check suite.
 func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent, proj *brigade.Project) error {
 	repo := pre.Repo.GetFullName()
-	ref := pre.PullRequest.Head.GetRef()
+	ref := fmt.Sprintf("refs/pull/%d/head", pre.PullRequest.GetNumber())
 	sha := pre.PullRequest.Head.GetSHA()
 	appID := s.opts.AppID
-	instID := s.opts.InstallationID
+	instID := pre.Installation.GetID()
 
 	if appID == 0 || instID == 0 {
 		log.Printf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
@@ -440,14 +430,6 @@ func (s *githubHook) isAllowedAuthor(author string) bool {
 		}
 	}
 	return false
-}
-
-func truncAt(str string, max int) string {
-	if len(str) > max {
-		short := str[0 : max-3]
-		return short + "..."
-	}
-	return str
 }
 
 func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, error) {
