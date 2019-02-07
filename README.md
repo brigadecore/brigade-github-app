@@ -257,7 +257,7 @@ function checkRequested(e, p) {
     return end.run()
   }).catch( (err) => {
     // In this case, we mark the ending failed.
-    end.env.CHECK_CONCLUSION = "failed"
+    end.env.CHECK_CONCLUSION = "failure"
     end.env.CHECK_SUMMARY = "Build failed"
     end.env.CHECK_TEXT = `Error: ${ err }`
     return end.run()
