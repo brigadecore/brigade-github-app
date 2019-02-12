@@ -69,6 +69,9 @@ type Run struct {
 
 	// Output is the output of this status message.
 	Output Output `json:"output,omitempty"`
+
+	// Actions is a list of custom action events.
+	Actions []Action `json:"actions,omitempty"`
 }
 
 // Output is the rich output of a check run
@@ -106,4 +109,11 @@ type Image struct {
 	ImageURL string `json:"image_url"`
 	Alt      string `json:"alt"`
 	Caption  string `json:"caption,omitempty"`
+}
+
+// Action is an custom event definition
+type Action struct {
+	Label       string `json:"label"`
+	Identifier  string `json:"identifier"`
+	Description string `json:"description"`
 }
