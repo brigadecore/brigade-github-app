@@ -32,7 +32,7 @@ func main() {
 
 	var actions []check.Action
 	actionsJSON := envOr("CHECK_ACTIONS", "")
-	if (actionsJSON != "") {
+	if actionsJSON != "" {
 		if err := json.Unmarshal([]byte(actionsJSON), &actions); err != nil {
 			fmt.Printf("Error: could not parse actions: %s\n", err)
 			os.Exit(1)
@@ -79,7 +79,7 @@ func main() {
 		run.CompletedAt = time.Now().Format(check.RFC8601)
 	}
 
-	if (actions != nil) {
+	if actions != nil {
 		run.Actions = actions
 	}
 
