@@ -30,6 +30,15 @@ func main() {
 	ghBaseURL := envOr("GITHUB_BASE_URL", "")
 	ghUploadURL := envOr("GITHUB_UPLOAD_URL", ghBaseURL)
 
+	var actions []check.Action
+	actionsJson := envOr("CHECK_ACTIONS", "")
+	if (actionsJson != "") {
+		if err := json.Unmarshal([]byte(actionsJson), &actions); err != nil {
+			fmt.Printf("Error: could not parse actions: %s\n", err)
+			os.Exit(1)
+		}
+	}
+
 	data := &webhook.Payload{}
 	if err := json.Unmarshal([]byte(payload), data); err != nil {
 		fmt.Printf("Error: could not parse payload: %s\n", err)
@@ -68,6 +77,10 @@ func main() {
 		run.Conclusion = conclusion
 		run.Status = "completed"
 		run.CompletedAt = time.Now().Format(check.RFC8601)
+	}
+
+	if (actions != nil) {
+		run.Actions = actions
 	}
 
 	// Once we have the token, we can switch from the app token to the
