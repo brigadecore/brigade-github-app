@@ -31,9 +31,9 @@ func main() {
 	ghUploadURL := envOr("GITHUB_UPLOAD_URL", ghBaseURL)
 
 	var actions []check.Action
-	actionsJson := envOr("CHECK_ACTIONS", "")
-	if (actionsJson != "") {
-		if err := json.Unmarshal([]byte(actionsJson), &actions); err != nil {
+	actionsJSON := envOr("CHECK_ACTIONS", "")
+	if (actionsJSON != "") {
+		if err := json.Unmarshal([]byte(actionsJSON), &actions); err != nil {
 			fmt.Printf("Error: could not parse actions: %s\n", err)
 			os.Exit(1)
 		}
