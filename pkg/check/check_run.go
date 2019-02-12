@@ -113,7 +113,7 @@ type Image struct {
 
 // Action is an custom event definition
 type Action struct {
-	Label 			string `json:"label"`
-	Identifier 	string `json:"identifier"`
+	Label       string `json:"label"`
+	Identifier  string `json:"identifier"`
 	Description string `json:"description"`
 }
