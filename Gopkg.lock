@@ -2,7 +2,7 @@
 
 
 [[projects]]
-  name = "github.com/Azure/brigade"
+  name = "github.com/brigadecore/brigade"
   packages = [
     "pkg/brigade",
     "pkg/merge",

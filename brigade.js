@@ -1,6 +1,6 @@
 const { events, Job, Group } = require("brigadier")
 
-const projectOrg = "Azure"
+const projectOrg = "brigadecore"
 const projectName = "brigade-github-app"
 
 const goImg = "golang:1.11"
@@ -116,7 +116,7 @@ class Notification {
       this.payload = e.payload;
       this.name = name;
       this.externalID = e.buildID;
-      this.detailsURL = `https://azure.github.io/kashti/builds/${ e.buildID }`;
+      this.detailsURL = `https://brigadecore.github.io/kashti/builds/${ e.buildID }`;
       this.title = "running check";
       this.text = "";
       this.summary = "";
