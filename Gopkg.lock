@@ -2,17 +2,40 @@
 
 
 [[projects]]
-  name = "github.com/brigadecore/brigade"
+  digest = "1:4286028763c249cdb1aaccd50d01a993e845bdca06c5dc5bca1e7d4372772faf"
+  name = "github.com/Azure/brigade"
   packages = [
     "pkg/brigade",
     "pkg/merge",
     "pkg/storage",
-    "pkg/storage/kube",
     "pkg/storage/kube/apicache",
+  ]
+  pruneopts = ""
+  revision = "5809151d4e7955289aceff5c2a8c24c7017e8aba"
+  version = "v0.20.0"
+
+[[projects]]
+  digest = "1:2681436d28e11c0cfe868728d1253ccc798159054a67a1ae7a29ef5c6dfc7eae"
+  name = "github.com/brigadecore/brigade"
+  packages = [
+    "pkg/brigade",
+    "pkg/storage",
+    "pkg/storage/kube",
   ]
   pruneopts = ""
   revision = "a3fa2cbe3fccce77713375605b556914c32c33a1"
   version = "v0.16.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:7820a1f92f8984cf4f3005378f03ee12e070572fd032bc66832a887128c7ec25"
+  name = "github.com/brigadecore/brigade-github-app"
+  packages = [
+    "pkg/check",
+    "pkg/webhook",
+  ]
+  pruneopts = ""
+  revision = "f1f907732729d5fe82ef6d8504beb51fcd205cd4"
 
 [[projects]]
   digest = "1:56c130d885a4aacae1dd9c7b71cfe39912c7ebc1ff7d2b46083c8812996dc43b"
@@ -499,9 +522,11 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/Azure/brigade/pkg/brigade",
-    "github.com/Azure/brigade/pkg/storage",
-    "github.com/Azure/brigade/pkg/storage/kube",
+    "github.com/brigadecore/brigade-github-app/pkg/check",
+    "github.com/brigadecore/brigade-github-app/pkg/webhook",
+    "github.com/brigadecore/brigade/pkg/brigade",
+    "github.com/brigadecore/brigade/pkg/storage",
+    "github.com/brigadecore/brigade/pkg/storage/kube",
     "github.com/dgrijalva/jwt-go",
     "github.com/google/go-github/github",
     "github.com/stretchr/testify/assert",
