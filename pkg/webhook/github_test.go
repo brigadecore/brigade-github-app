@@ -11,8 +11,8 @@ import (
 	"github.com/google/go-github/github"
 	gin "gopkg.in/gin-gonic/gin.v1"
 
-	"github.com/Azure/brigade/pkg/brigade"
-	"github.com/Azure/brigade/pkg/storage"
+	"github.com/brigadecore/brigade/pkg/brigade"
+	"github.com/brigadecore/brigade/pkg/storage"
 )
 
 type testStore struct {

@@ -2,8 +2,7 @@
 
 
 [[projects]]
-  digest = "1:2681436d28e11c0cfe868728d1253ccc798159054a67a1ae7a29ef5c6dfc7eae"
-  name = "github.com/Azure/brigade"
+  name = "github.com/brigadecore/brigade"
   packages = [
     "pkg/brigade",
     "pkg/merge",
