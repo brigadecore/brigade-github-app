@@ -4,7 +4,7 @@
 
 **This is considered experimental and pre-Alpha. Do not use it in production.**
 
-This is a [Brigade](https://github.com/Azure/brigade) gateway that provides a
+This is a [Brigade](https://github.com/brigadecore/brigade) gateway that provides a
 GitHub App with deep integration to GitHub's new Check API.
 
 ![screenshot](docs/screenshot.png)
@@ -54,7 +54,7 @@ step.
 ### 2. Install the Helm chart into your cluster
 
 The [Brigade Github App Helm Chart][brigade-github-app-chart] is hosted at the
-[Azure/brigade-charts][brigade-charts] repository.
+[brigadecore/charts][charts] repository.
 
 You must install this gateway into the same namespace in your cluster where
 Brigade is already running.
@@ -64,7 +64,7 @@ either by setting the Service to be a load balancer, or setting up the Ingress. 
 STRONGLY recommend setting up an ingress to use Kube-LEGO or another SSL proxy.
 
 ```
-$ helm repo add brigade https://azure.github.io/brigade-charts
+$ helm repo add brigade https://brigadecore.github.io/charts
 $ helm inspect values brigade/brigade-github-app > values.yaml
 $ # Edit values.yaml
 $ helm install -n gh-app brigade/brigade-github-app
@@ -324,5 +324,5 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
-[brigade-charts]: https://github.com/Azure/brigade-charts
-[brigade-github-app-chart]: https://github.com/Azure/brigade-charts/tree/master/charts/brigade-github-app
+[charts]: https://github.com/brigadecore/charts
+[brigade-github-app-chart]: https://github.com/brigadecore/charts/tree/master/charts/brigade-github-app
