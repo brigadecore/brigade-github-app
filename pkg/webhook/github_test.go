@@ -133,6 +133,12 @@ func TestGithubHandler(t *testing.T) {
 			ref:         "master",
 			payloadFile: "testdata/github-deployment_status-payload.json",
 		},
+		{
+			event:       "pull_request_review_comment",
+			commit:      "34c5c7793cb3b279e22454cb6750c80560547b3a",
+			ref:         "refs/pull/1/head",
+			payloadFile: "testdata/github-pull_request_review_comment-payload.json",
+		},
 	}
 
 	for _, tt := range tests {
