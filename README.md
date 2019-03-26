@@ -1,9 +1,5 @@
 # Brigade Github App: Advanced GitHub Gateway for Brigade
 
-[![Stability: Experimental](https://masterminds.github.io/stability/experimental.svg)](https://masterminds.github.io/stability/experimental.html)
-
-**This is considered experimental and pre-Alpha. Do not use it in production.**
-
 This is a [Brigade](https://github.com/brigadecore/brigade) gateway that provides a
 GitHub App with deep integration to GitHub's new Check API.
 
@@ -18,7 +14,6 @@ Prerequisites:
 
 - A Kubernetes cluster running Brigade
 - kubectl and Helm
-- A local clone of this repository
 
 You will also need to pick out a domain name (referenced as *YOUR_DOMAIN* below)
 to send GitHub requests to. Example: `gh-gateway.example.com`. If you don't want
@@ -141,7 +136,6 @@ You will want to make sure to set:
 
 - `project`, `repository`, and `cloneURL`  to point to your repo
 - `sharedSecret` to use the shared secret you created when creating the app
-- `github.token` (aka `github: {token: }`) to the OAuth token GitHub Apps gave you
 
 ## 7. (OPTIONAL): Forwarding `pull_request` to `check_suite`
 
@@ -160,6 +154,8 @@ github:
 ```
 
 This value is provided after the GitHub App is created on GitHub (see 1. Create a GitHub App). To find this value after creation, visit `https://github.com/settings/apps/your-app-name`.
+
+> Using the application ID and the private key configured when deploying the Helm chart, this gateway creates a new GitHub token for each request, meaning that we don't have to create a per-repository token.
 
 When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
 
