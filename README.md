@@ -209,7 +209,7 @@ run complete. On error, it marks the run failed.
 
 ```javascript
 const {events, Job, Group} = require("brigadier");
-const checkRunImage = "deis/brigade-github-check-run:latest"
+const checkRunImage = "brigadecore/brigade-github-check-run:latest"
 
 events.on("check_suite:requested", checkRequested)
 events.on("check_suite:rerequested", checkRequested)
