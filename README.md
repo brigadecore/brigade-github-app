@@ -139,7 +139,9 @@ You will want to make sure to set:
 
 ## 7. (OPTIONAL): Forwarding `pull_request` to `check_suite`
 
-This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled by default.
+This gateway can enable a feature that converts certain PR events to Check Suite
+requests. (Namely, PR events with an `action` that indicates code was affected
+and may be in need of checking.) Currently, this is enabled by default.
 
 To disable this feature, set the environment variable `CHECK_SUITE_ON_PR=false` on the deployment for the server.
 This can also be done by setting `github.checkSuiteOnPR` to `false` in the chart's `values.yaml`.

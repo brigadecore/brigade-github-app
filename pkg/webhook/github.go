@@ -305,8 +305,11 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		return
 	}
 
-	// If s.opts.CheckSuiteOnPR is set, this will create a new check suite request.
-	if eventType == "pull_request" && s.opts.CheckSuiteOnPR {
+	// If s.opts.CheckSuiteOnPR is set, AND the action is one that indicates code
+	// may have changed and needs to be checked, this will create a new check
+	// suite request.
+	if preAction := pre.GetAction(); eventType == "pull_request" && s.opts.CheckSuiteOnPR &&
+		(preAction == "opened" || preAction == "synchronize" || preAction == "reopened") {
 		if err := s.prToCheckSuite(c, pre, proj); err != nil {
 			if err == ErrAuthFailed {
 				c.JSON(http.StatusForbidden, gin.H{"status": err.Error()})
