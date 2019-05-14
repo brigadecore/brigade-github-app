@@ -69,7 +69,8 @@ func (s *githubHook) Handle(c *gin.Context) {
 		log.Print("Received ping from GitHub")
 		c.JSON(200, gin.H{"message": "OK"})
 		return
-	case "push", "pull_request", "create", "release", "status", "commit_comment", "pull_request_review", "deployment", "deployment_status":
+	case "push", "pull_request", "create", "release", "status", "commit_comment", "pull_request_review",
+		"deployment", "deployment_status", "pull_request_review_comment":
 		s.handleEvent(c, event)
 		return
 	// Added
@@ -281,6 +282,11 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.Deployment.GetSHA()
 		rev.Ref = e.Deployment.GetRef()
+	case *github.PullRequestReviewCommentEvent:
+		repo = e.Repo.GetFullName()
+		rev.Commit = e.PullRequest.Head.GetSHA()
+		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
+
 	default:
 		log.Printf("Failed to parse payload")
 		c.JSON(http.StatusBadRequest, gin.H{"status": "Received data is not valid JSON"})
