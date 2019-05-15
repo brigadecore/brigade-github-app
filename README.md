@@ -186,14 +186,66 @@ really receive will be much more detailed.
 
 ### Events Emitted by this Gateway
 
-This gateway emits the following events:
+Select events received by this gateway from Github are, in turn, emitted into
+Brigade. In some cases, events received from Github contain an `action` field.
+For all such events, _two_ events will be emitted into Brigade. One will be a
+coarse-grained event, unaqualified by `action`. The second will be more
+finely-grained and qualified by `action`. The latter permits Brigade users to to
+more easily subscribe to a relevant subset of events that are of interest to
+them. For instance, if a user is interested in subscribing only to events that
+indicate a new pull request was opened, they may subscribe to
+`pull_request:opened` instead of subscribing to the more broad `pull_request`
+event, which would have burdened the user with writing logic to select on the
+basis of `action` themselves.
 
-- `check_suite:requested`: When a new request is opened
-- `check_suite:rerequested`: When checks are requested again
-- `check_suite:completed`: When a check suite is completed
-- `check_run:created`: When an individual test is requested
-- `check_run:updated`: When an individual test is updated with new status
-- `check_run:rerequested`: When an individual test is re-requested
+The events emitted by this gateway into Brigade are:
+
+- `check_run`: A check run event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `check_run:completed`: The `status` of a check run was updated to `completed`.
+- `check_run:created`: A new check run was created.
+- `check_run:requested_action`: Someone requested that an action be taken.
+- `check_run:rerequested`: Someone requested to re-run your check run.
+- `check_suite:completed`: The `status` of a check suite was updated to `completed`.
+- `check_suite:requested`: A new check suite was created.
+- `check_suite:rerequested`: Someone requested to re-run your check suite.
+- `commit_comment`: A commit comment event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `commit_comment:created`: A commit comment was created.
+- `create`: A branch or tag was created.
+- `deployment`: A deployment was created.
+- `deployment_status`: A deployment's sdtatus has changed.
+- `pull_request`: A pull request event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `pull_request:assigned`: A pull request was assigned.
+- `pull_request:closed`: A pull request was closed.
+- `pull_request:edited`: A pull request was edited (e.g. title or body is edited).
+- `pull_request:labeled`: A new label was assigned to a pull request.
+- `pull_request:locked`: A pull request was locked.
+- `pull_request:opened`: A new pull request was opened.
+- `pull_request:ready_for_review`: A pull request is ready for review.
+- `pull_request:reopened`: A closed pulled request was re-opened.
+- `pull_request:review_request_removed`: An existing request for pull request review was removed.
+- `pull_request:review_requested`: A pull request review was re-requested.
+- `pull_request:unassigned`: A pull request was unassigned.
+- `pull_request:unlabeled`: A label was removed from a pull request.
+- `pull_request:unlocked`: A pull request was unlocked.
+- `pull_request_review`: A pull request review with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `pull_request_review:submitted`: A pull request review was submitted.
+- `pull_request_review:edited`: A pull request review was edited.
+- `pull_request_review:dismissed`: A pull request review was dismissed.
+- `pull_request_review_comment`: A pull request review comment with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `pull_request_review_comment:created`: A new pull request review comment was created.
+- `pull_request_review_comment:deleted`: An existing pull request review comment was deleted.
+- `pull_request_review_comment:edited`: An existing pull request review comment was edited.
+- `push`: A commit was pushed to a branch or a new tag was applied.
+- `release`: A release event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `release:created`: A new release was created.
+- `release:deleted`: An existing release was deleted.
+- `release:edited`: An existing release was edited.
+- `release:prereleased`: A release is pre-released.
+- `release:published`: A release is published.
+- `release:unpublished`: A release is unpublished.
+- `status`: The status of a git commit was changed.
+
+Each of these events is described in greater detail in [Github's own API documentation](https://developer.github.com/v3/activity/events/types/).
 
 The `check_suite` events will let you start all of your tests at once, while the
 `check_run` events will let you work with individual tests. The example in the
