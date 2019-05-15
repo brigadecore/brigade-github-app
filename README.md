@@ -200,68 +200,118 @@ The `check_suite` events will let you start all of your tests at once, while the
 next section shows how to work with suites, while still supporting re-runs of the
 main test.
 
-### Running a new set of checks
+### Running check suites and check runs
 
 Currently this gateway forwards all events on to the Brigade.js script, and does
 not create new `check_run` requests. The `brigade.js` must create a run, and then
 update GitHub as to the status of that run.
 
-Here's an example that starts a new run, does a test, and then marks that
-run complete. On error, it marks the run failed.
+Here's an example that shows how to run a full Check Suite on corresponding
+`check_suite` notifications, as well as running only the rerequested Check Run
+from an inbound `check_run` event.
 
 ```javascript
 const {events, Job, Group} = require("brigadier");
-const checkRunImage = "brigadecore/brigade-github-check-run:latest"
+const checkRunImage = "brigadecore/brigade-github-check-run:latest";
 
-events.on("check_suite:requested", checkRequested)
-events.on("check_suite:rerequested", checkRequested)
-events.on("check_run:rerequested", checkRequested)
+events.on("check_suite:requested", checkSuiteRequested);
+events.on("check_suite:rerequested", checkSuiteRequested);
+events.on("check_run:rerequested", checkRequested);
 
+// Checks represent a list of checks that by default are run in the form
+// of a check suite, but may be run individually
+//
+// Each entry's key is the check name and the value is the function to run
+Checks = {
+  "build": build,
+  "test": test
+};
+
+// build runs our build job
+function build(e, p) {
+  return new Job("build", "alpine:3.7", ["sleep 60", "echo building!"]);
+}
+
+// test runs our test job
+function test(e, p) {
+  return new Job("test", "alpine:3.7", ["sleep 60", "echo testing!"]);
+}
+
+// checkRequested is the default function invoked on a check_run:* event
+//
+// It determines which check is being requested (from the payload body)
+// and runs this particular check, or else throws an error if the check
+// is not found
 function checkRequested(e, p) {
-  console.log("check requested")
+  payload = JSON.parse(e.payload);
+
+  name = payload.body.check_run.name;
+  check = Checks[name];
+
+  if (typeof check !== 'undefined') {
+    checkRun(e, p, name, check)
+      .catch(e => {console.error(e.toString())});
+  } else {
+    err = new Error(`No check found with name: ${name}`);
+    throw err;
+  }
+}
+
+// checkSuiteRequested is the default function invoked on a check_suite:* event
+//
+// It loops over our standard set of checks and runs them in parallel
+// such that they may report their results independently to GitHub
+function checkSuiteRequested(e, p) {
+  for (check of Object.entries(Checks)) {
+      checkRun(e, p, check[0], check[1])
+        .catch(e => {console.error(e.toString())});
+  }
+}
+
+// checkRun is a GitHub Check Run, running the provided runFunc that corresponds
+// to the provided check name, wrapped in notification jobs to update GitHub
+// along the way
+function checkRun(e, p, name, runFunc) {
+  console.log(`Check requested: ${name}`);
+
   // Common configuration
   const env = {
     CHECK_PAYLOAD: e.payload,
-    CHECK_NAME: "MyService",
-    CHECK_TITLE: "Echo Test",
-  }
+    CHECK_NAME: name,
+    CHECK_TITLE: `Run ${name}`
+  };
 
-  // This will represent our build job. For us, it's just an empty thinger.
-  const build = new Job("build", "alpine:3.7", ["sleep 60", "echo hello"])
+  // For convenience, we'll create three jobs: one for each GitHub Check stage.
+  const start = new Job(`start-${name}`, checkRunImage);
+  start.imageForcePull = true;
+  start.env = env;
+  start.env.CHECK_SUMMARY = `Running ${name} for ${e.revision.commit}`;
 
-  // For convenience, we'll create three jobs: one for each GitHub Check
-  // stage.
-  const start = new Job("start-run", checkRunImage)
-  start.imageForcePull = true
-  start.env = env
-  start.env.CHECK_SUMMARY = "Beginning test run"
-
-  const end = new Job("end-run", checkRunImage)
-  end.imageForcePull = true
-  end.env = env
+  const end = new Job(`end-${name}`, checkRunImage);
+  end.imageForcePull = true;
+  end.env = env;
 
   // Now we run the jobs in order:
   // - Notify GitHub of start
-  // - Run the test
+  // - Run the check
   // - Notify GitHub of completion
   //
   // On error, we catch the error and notify GitHub of a failure.
   start.run().then(() => {
-    return build.run()
+    return runFunc(e, p).run();
   }).then( (result) => {
-    end.env.CHECK_CONCLUSION = "success"
-    end.env.CHECK_SUMMARY = "Build completed"
-    end.env.CHECK_TEXT = result.toString()
-    return end.run()
+    end.env.CHECK_CONCLUSION = "success";
+    end.env.CHECK_SUMMARY = `${name} completed`;
+    end.env.CHECK_TEXT = result.toString();
+    return end.run();
   }).catch( (err) => {
     // In this case, we mark the ending failed.
-    end.env.CHECK_CONCLUSION = "failure"
-    end.env.CHECK_SUMMARY = "Build failed"
-    end.env.CHECK_TEXT = `Error: ${ err }`
-    return end.run()
+    end.env.CHECK_CONCLUSION = "failure";
+    end.env.CHECK_SUMMARY = `${name} failed`;
+    end.env.CHECK_TEXT = `Error: ${ err }`;
+    return end.run();
   })
 }
-
 ```
 
 ### Parameters available on the `check-run` container
