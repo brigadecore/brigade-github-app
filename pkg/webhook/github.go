@@ -38,8 +38,9 @@ type githubHook struct {
 // GithubOpts provides options for configuring a GitHub hook
 type GithubOpts struct {
 	// CheckSuiteOnPR will trigger a check suite run for new PRs that pass the security params.
-	CheckSuiteOnPR bool
-	AppID          int
+	CheckSuiteOnPR      bool
+	AppID               int
+	DefaultSharedSecret string
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -165,13 +166,17 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		return
 	}
 
-	if proj.SharedSecret == "" {
+	var sharedSecret = proj.SharedSecret
+	if sharedSecret == "" {
+		sharedSecret = s.opts.DefaultSharedSecret
+	}
+	if sharedSecret == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
 		return
 	}
 
 	signature := c.Request.Header.Get(hubSignatureHeader)
-	if err := validateSignature(signature, proj.SharedSecret, body); err != nil {
+	if err := validateSignature(signature, sharedSecret, body); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
 		return
 	}
@@ -303,13 +308,17 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		return
 	}
 
-	if proj.SharedSecret == "" {
+	var sharedSecret = proj.SharedSecret
+	if sharedSecret == "" {
+		sharedSecret = s.opts.DefaultSharedSecret
+	}
+	if sharedSecret == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
 		return
 	}
 
 	signature := c.Request.Header.Get(hubSignatureHeader)
-	if err := validateSignature(signature, proj.SharedSecret, body); err != nil {
+	if err := validateSignature(signature, sharedSecret, body); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
 		return
 	}

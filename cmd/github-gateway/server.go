@@ -94,8 +94,9 @@ func main() {
 	}
 
 	ghOpts := webhook.GithubOpts{
-		CheckSuiteOnPR: envOrBool("CHECK_SUITE_ON_PR", true),
-		AppID:          envOrInt("APP_ID", 0),
+		CheckSuiteOnPR:      envOrBool("CHECK_SUITE_ON_PR", true),
+		AppID:               envOrInt("APP_ID", 0),
+		DefaultSharedSecret: os.Getenv("DEFAULT_SHARED_SECRET"),
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)
