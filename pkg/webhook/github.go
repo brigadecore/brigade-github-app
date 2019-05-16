@@ -95,9 +95,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 
 	log.Print(string(body))
 
-	// This can be further refined
-	brigEvent := eventType
-
+	var action string
 	var repo string
 	var rev brigade.Revision
 	var res *Payload
@@ -124,7 +122,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		}
 
 		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
-		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
+		action = e.GetAction()
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.CheckSuite.GetHeadSHA()
 		rev.Ref = e.CheckSuite.GetHeadBranch()
@@ -154,7 +152,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 			return
 		}
 
-		brigEvent = fmt.Sprintf("%s:%s", eventType, e.GetAction())
+		action = e.GetAction()
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.CheckRun.CheckSuite.GetHeadSHA()
 		rev.Ref = e.CheckRun.CheckSuite.GetHeadBranch()
@@ -203,7 +201,14 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
 		return
 	}
-	s.build(brigEvent, rev, payload, proj)
+
+	// Schedule a build using the raw eventType
+	s.build(eventType, rev, payload, proj)
+	// For events that have an action, schedule a second build for eventType:action
+	if action != "" {
+		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, payload, proj)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
 
@@ -227,6 +232,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 	var rev brigade.Revision
 	// Used only for check suite
 	var pre *github.PullRequestEvent
+	var action string
 
 	switch e := e.(type) {
 	case *github.PushEvent:
@@ -244,19 +250,13 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 			return
 		}
 		pre = e
-
-		// EXPERIMENTAL: Since labeling and unlabeling PRs doesn't really have a
-		// code impact, we don't really want to fire off the same event (or require
-		// the user to know the event details). So we add a pseudo-event for labeling
-		// actions.
-		if a := e.GetAction(); a == "labeled" || a == "unlabeled" {
-			eventType = "pull_request:" + a
-		}
+		action = e.GetAction()
 
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.PullRequest.Head.GetSHA()
 		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
 	case *github.CommitCommentEvent:
+		action = e.GetAction()
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.Comment.GetCommitID()
 	case *github.CreateEvent:
@@ -265,12 +265,14 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		repo = e.Repo.GetFullName()
 		rev.Ref = e.GetRef()
 	case *github.ReleaseEvent:
+		action = e.GetAction()
 		repo = e.Repo.GetFullName()
 		rev.Ref = e.Release.GetTagName()
 	case *github.StatusEvent:
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.Commit.GetSHA()
 	case *github.PullRequestReviewEvent:
+		action = e.GetAction()
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.PullRequest.Head.GetSHA()
 		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
@@ -283,6 +285,7 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		rev.Commit = e.Deployment.GetSHA()
 		rev.Ref = e.Deployment.GetRef()
 	case *github.PullRequestReviewCommentEvent:
+		action = e.GetAction()
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.PullRequest.Head.GetSHA()
 		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
@@ -314,8 +317,8 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 	// If s.opts.CheckSuiteOnPR is set, AND the action is one that indicates code
 	// may have changed and needs to be checked, this will create a new check
 	// suite request.
-	if preAction := pre.GetAction(); eventType == "pull_request" && s.opts.CheckSuiteOnPR &&
-		(preAction == "opened" || preAction == "synchronize" || preAction == "reopened") {
+	if eventType == "pull_request" && s.opts.CheckSuiteOnPR &&
+		(action == "opened" || action == "synchronize" || action == "reopened") {
 		if err := s.prToCheckSuite(c, pre, proj); err != nil {
 			if err == ErrAuthFailed {
 				c.JSON(http.StatusForbidden, gin.H{"status": err.Error()})
@@ -326,7 +329,13 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		// TODO: do we return here (e.g. stop the PR hook) if we get to this point
 	}
 
+	// Schedule a build using the raw eventType
 	s.build(eventType, rev, body, proj)
+	// For events that have an action, schedule a second build for eventType:action
+	if action != "" {
+		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, body, proj)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
 
