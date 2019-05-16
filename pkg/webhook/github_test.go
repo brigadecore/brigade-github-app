@@ -43,12 +43,19 @@ func newTestStore() *testStore {
 func newTestGithubHandler(store storage.Store, t *testing.T) *githubHook {
 	return &githubHook{
 		store:          store,
-		allowedAuthors: []string{"OWNERS"},
+		allowedAuthors: []string{"OWNER"},
 		getFile: func(commit, path string, proj *brigade.Project) ([]byte, error) {
-			return []byte(""), nil
+						return []byte(""), nil
 		},
 		createStatus: func(commit string, proj *brigade.Project, status *github.RepoStatus) error {
-			return nil
+						return nil
+		},
+		handleIssueCommentEvent: func(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
+			revision := brigade.Revision{
+				Commit: "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+				Ref: "refs/pull/2/head",
+			}
+			return revision, []byte{}
 		},
 	}
 }
@@ -64,69 +71,16 @@ func TestGithubHandler(t *testing.T) {
 		expectedBuilds []string
 	}{
 		{
-			event:          "push",
-			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			ref:            "refs/heads/changes",
-			payloadFile:    "testdata/github-push-payload.json",
-			expectedBuilds: []string{"push"},
-		},
-		{
-			event:       "push",
-			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			payloadFile: "testdata/github-push-delete-branch.json",
-			mustFail:    true,
-		},
-		{
-			event:       "pull_request",
-			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			ref:         "refs/pull/1/head",
-			payloadFile: "testdata/github-pull_request-payload-failed-perms.json",
-			mustFail:    true,
-		},
-		{
-			event:          "pull_request",
-			ref:            "refs/pull/1/head",
-			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			payloadFile:    "testdata/github-pull_request-payload.json",
-			expectedBuilds: []string{"pull_request", "pull_request:opened"},
-		},
-		{
-			event:          "pull_request_review",
-			commit:         "b7a1f9c27caa4e03c14a88feb56e2d4f7500aa63",
-			ref:            "refs/pull/8/head",
-			payloadFile:    "testdata/github-pull_request_review-payload.json",
-			expectedBuilds: []string{"pull_request_review", "pull_request_review:submitted"},
-		},
-		{
-			event:          "pull_request",
-			commit:         "ad0703ac08e80448764b34dc089d0f73a1242ae9",
-			ref:            "refs/pull/1/head",
-			payloadFile:    "testdata/github-pull_request-labeled-payload.json",
-			expectedBuilds: []string{"pull_request", "pull_request:labeled"},
-		},
-		{
-			event:          "status",
+			event:          "commit_comment",
 			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
-			payloadFile:    "testdata/github-status-payload.json",
-			expectedBuilds: []string{"status"},
-		},
-		{
-			event:          "release",
-			ref:            "0.0.1",
-			payloadFile:    "testdata/github-release-payload.json",
-			expectedBuilds: []string{"release", "release:published"},
+			payloadFile:    "testdata/github-commit_comment-payload.json",
+			expectedBuilds: []string{"commit_comment", "commit_comment:created"},
 		},
 		{
 			event:          "create",
 			ref:            "0.0.1",
 			payloadFile:    "testdata/github-create-payload.json",
 			expectedBuilds: []string{"create"},
-		},
-		{
-			event:          "commit_comment",
-			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
-			payloadFile:    "testdata/github-commit_comment-payload.json",
-			expectedBuilds: []string{"commit_comment", "commit_comment:created"},
 		},
 		{
 			event:          "deployment",
@@ -143,11 +97,92 @@ func TestGithubHandler(t *testing.T) {
 			expectedBuilds: []string{"deployment_status"},
 		},
 		{
+			event:          "issue_comment",
+			commit:         "",
+			ref:            "refs/heads/master",
+			payloadFile:    "testdata/github-issue_comment-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:created"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "",
+			ref:            "refs/heads/master",
+			payloadFile:    "testdata/github-issue_comment_pull_request_comment_deleted-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:deleted"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "",
+			ref:            "refs/heads/master",
+			payloadFile:    "testdata/github-issue_comment_pull_request_author_not_allowed-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:edited"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			ref:            "refs/pull/2/head",
+			payloadFile:    "testdata/github-issue_comment_pull_request_author_allowed-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:edited"},
+		},
+		{
+			event:       "pull_request",
+			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			ref:         "refs/pull/1/head",
+			payloadFile: "testdata/github-pull_request-payload-failed-perms.json",
+			mustFail:    true,
+		},
+		{
+			event:          "pull_request",
+			ref:            "refs/pull/1/head",
+			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			payloadFile:    "testdata/github-pull_request-payload.json",
+			expectedBuilds: []string{"pull_request", "pull_request:opened"},
+		},
+		{
+			event:          "pull_request",
+			commit:         "ad0703ac08e80448764b34dc089d0f73a1242ae9",
+			ref:            "refs/pull/1/head",
+			payloadFile:    "testdata/github-pull_request-labeled-payload.json",
+			expectedBuilds: []string{"pull_request", "pull_request:labeled"},
+		},
+		{
+			event:          "pull_request_review",
+			commit:         "b7a1f9c27caa4e03c14a88feb56e2d4f7500aa63",
+			ref:            "refs/pull/8/head",
+			payloadFile:    "testdata/github-pull_request_review-payload.json",
+			expectedBuilds: []string{"pull_request_review", "pull_request_review:submitted"},
+		},
+		{
 			event:          "pull_request_review_comment",
 			commit:         "34c5c7793cb3b279e22454cb6750c80560547b3a",
 			ref:            "refs/pull/1/head",
 			payloadFile:    "testdata/github-pull_request_review_comment-payload.json",
 			expectedBuilds: []string{"pull_request_review_comment", "pull_request_review_comment:created"},
+		},
+		{
+			event:          "push",
+			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			ref:            "refs/heads/changes",
+			payloadFile:    "testdata/github-push-payload.json",
+			expectedBuilds: []string{"push"},
+		},
+		{
+			event:       "push",
+			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			payloadFile: "testdata/github-push-delete-branch.json",
+			mustFail:    true,
+		},
+		{
+			event:          "status",
+			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
+			payloadFile:    "testdata/github-status-payload.json",
+			expectedBuilds: []string{"status"},
+		},
+		{
+			event:          "release",
+			ref:            "0.0.1",
+			payloadFile:    "testdata/github-release-payload.json",
+			expectedBuilds: []string{"release", "release:published"},
 		},
 	}
 

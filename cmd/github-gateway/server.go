@@ -112,8 +112,8 @@ func main() {
 	events := router.Group("/events")
 	{
 		events.Use(gin.Logger())
-		events.POST("/github", webhook.NewGithubHook(store, allowedAuthors, key, ghOpts))
-		events.POST("/github/:app/:inst", webhook.NewGithubHook(store, allowedAuthors, key, ghOpts))
+		events.POST("/github", webhook.NewGithubHookHandler(store, allowedAuthors, key, ghOpts))
+		events.POST("/github/:app/:inst", webhook.NewGithubHookHandler(store, allowedAuthors, key, ghOpts))
 	}
 
 	router.GET("/healthz", healthz)

@@ -17,6 +17,10 @@ import (
 )
 
 func main() {
+	repo := envOr("CHECK_REPO", "")
+	commit := envOr("CHECK_COMMIT", "")
+	branch := envOr("CHECK_BRANCH", "")
+
 	payload := os.Getenv("CHECK_PAYLOAD")
 	name := envOr("CHECK_NAME", "Brigade")
 	title := envOr("CHECK_TITLE", "Running Check")
@@ -44,12 +48,17 @@ func main() {
 		fmt.Printf("Error: could not parse payload: %s\n", err)
 		os.Exit(1)
 	}
-
 	token := data.Token
-	repo, commit, branch, err := repoCommitBranch(data)
-	if err != nil {
-		fmt.Printf("Error processing data: %s", err)
-		os.Exit(2)
+
+	// if one or more of repo, commit, or branch not set in env,
+	// parse from payload body
+	if repo == "" || commit == "" || branch == "" {
+		var err error
+		repo, commit, branch, err = repoCommitBranch(data)
+		if err != nil {
+			fmt.Printf("Error processing data: %s", err)
+			os.Exit(2)
+		}
 	}
 
 	parts := strings.Split(repo, "/")
