@@ -1,6 +1,6 @@
 const { events, Job, Group } = require("brigadier")
 
-const projectOrg = "Azure"
+const projectOrg = "brigadecore"
 const projectName = "brigade-github-app"
 
 const goImg = "golang:1.11"
@@ -66,7 +66,7 @@ function goDockerBuild(project, tag) {
 function dockerhubPublish(project, tag) {
   const publisher = new Job("dockerhub-publish", "docker");
   let dockerRegistry = project.secrets.dockerhubRegistry || "docker.io";
-  let dockerOrg = project.secrets.dockerhubOrg || "deis";
+  let dockerOrg = project.secrets.dockerhubOrg || "brigadecore";
 
   publisher.docker.enabled = true;
   publisher.storage.enabled = true;
@@ -116,7 +116,7 @@ class Notification {
       this.payload = e.payload;
       this.name = name;
       this.externalID = e.buildID;
-      this.detailsURL = `https://azure.github.io/kashti/builds/${ e.buildID }`;
+      this.detailsURL = `https://brigadecore.github.io/kashti/builds/${ e.buildID }`;
       this.title = "running check";
       this.text = "";
       this.summary = "";
@@ -132,7 +132,7 @@ class Notification {
   // Send a new notification, and return a Promise<result>.
   run() {
       this.count++
-      var j = new Job(`${ this.name }-${ this.count }`, "deis/brigade-github-check-run:latest");
+      var j = new Job(`${ this.name }-${ this.count }`, "brigadecore/brigade-github-check-run:latest");
       j.imageForcePull = true;
       j.env = {
           CHECK_CONCLUSION: this.conclusion,

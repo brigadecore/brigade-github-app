@@ -3,7 +3,7 @@ SHELL ?= /bin/bash
 # The Docker registry where images are pushed.
 # Note that if you use an org (like on Quay and DockerHub), you should
 # include that: quay.io/foo
-DOCKER_REGISTRY    ?= deis
+DOCKER_REGISTRY    ?= brigadecore
 
 GIT_TAG   = $(shell git describe --tags --always 2>/dev/null)
 VERSION   ?= ${GIT_TAG}
