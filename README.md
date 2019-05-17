@@ -328,6 +328,7 @@ The following parameters can be specified via environment variables:
 - `CHECK_TEXT`: A long message explaining the results.
 - `CHECK_CONCLUSION`: One of: "succeeded", "failure", "neutral", "canceled", or "timed_out".
   The "action_required" conclusion can be set if CHECK_DETAILS_URL is also set.
+- `CHECK_STARTED_AT`: The time that the check run started (timestamp in ISO 8601 format). This is used to calculate the running time of the check run.
 - `CHECK_DETAILS_URL`: The URL of an external site that has more information. This
   is typically used with CHECK_CONCLUSION=action_required.
 - `CHECK_EXTERNAL_ID`: An ID that correlates this run to another source. For example,
