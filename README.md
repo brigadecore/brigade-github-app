@@ -1,10 +1,6 @@
 # Brigade Github App: Advanced GitHub Gateway for Brigade
 
-[![Stability: Experimental](https://masterminds.github.io/stability/experimental.svg)](https://masterminds.github.io/stability/experimental.html)
-
-**This is considered experimental and pre-Alpha. Do not use it in production.**
-
-This is a [Brigade](https://github.com/Azure/brigade) gateway that provides a
+This is a [Brigade](https://github.com/brigadecore/brigade) gateway that provides a
 GitHub App with deep integration to GitHub's new Check API.
 
 ![screenshot](docs/screenshot.png)
@@ -18,7 +14,6 @@ Prerequisites:
 
 - A Kubernetes cluster running Brigade
 - kubectl and Helm
-- A local clone of this repository
 
 You will also need to pick out a domain name (referenced as *YOUR_DOMAIN* below)
 to send GitHub requests to. Example: `gh-gateway.example.com`. If you don't want
@@ -54,7 +49,7 @@ step.
 ### 2. Install the Helm chart into your cluster
 
 The [Brigade Github App Helm Chart][brigade-github-app-chart] is hosted at the
-[Azure/brigade-charts][brigade-charts] repository.
+[brigadecore/charts][charts] repository.
 
 You must install this gateway into the same namespace in your cluster where
 Brigade is already running.
@@ -64,7 +59,7 @@ either by setting the Service to be a load balancer, or setting up the Ingress. 
 STRONGLY recommend setting up an ingress to use Kube-LEGO or another SSL proxy.
 
 ```
-$ helm repo add brigade https://azure.github.io/brigade-charts
+$ helm repo add brigade https://brigadecore.github.io/charts
 $ helm inspect values brigade/brigade-github-app > values.yaml
 $ # Edit values.yaml
 $ helm install -n gh-app brigade/brigade-github-app
@@ -141,11 +136,12 @@ You will want to make sure to set:
 
 - `project`, `repository`, and `cloneURL`  to point to your repo
 - `sharedSecret` to use the shared secret you created when creating the app
-- `github.token` (aka `github: {token: }`) to the OAuth token GitHub Apps gave you
 
 ## 7. (OPTIONAL): Forwarding `pull_request` to `check_suite`
 
-This gateway can enable a feature that converts PRs to Check Suite requests. Currently, this is enabled by default.
+This gateway can enable a feature that converts certain PR events to Check Suite
+requests. (Namely, PR events with an `action` that indicates code was affected
+and may be in need of checking.) Currently, this is enabled by default.
 
 To disable this feature, set the environment variable `CHECK_SUITE_ON_PR=false` on the deployment for the server.
 This can also be done by setting `github.checkSuiteOnPR` to `false` in the chart's `values.yaml`.
@@ -160,6 +156,8 @@ github:
 ```
 
 This value is provided after the GitHub App is created on GitHub (see 1. Create a GitHub App). To find this value after creation, visit `https://github.com/settings/apps/your-app-name`.
+
+> Using the application ID and the private key configured when deploying the Helm chart, this gateway creates a new GitHub token for each request, meaning that we don't have to create a per-repository token.
 
 When these parameters are set, incoming pull requests will also trigger `check_suite:created` events.
 
@@ -188,14 +186,66 @@ really receive will be much more detailed.
 
 ### Events Emitted by this Gateway
 
-This gateway emits the following events:
+Select events received by this gateway from Github are, in turn, emitted into
+Brigade. In some cases, events received from Github contain an `action` field.
+For all such events, _two_ events will be emitted into Brigade. One will be a
+coarse-grained event, unaqualified by `action`. The second will be more
+finely-grained and qualified by `action`. The latter permits Brigade users to to
+more easily subscribe to a relevant subset of events that are of interest to
+them. For instance, if a user is interested in subscribing only to events that
+indicate a new pull request was opened, they may subscribe to
+`pull_request:opened` instead of subscribing to the more broad `pull_request`
+event, which would have burdened the user with writing logic to select on the
+basis of `action` themselves.
 
-- `check_suite:requested`: When a new request is opened
-- `check_suite:rerequested`: When checks are requested again
-- `check_suite:completed`: When a check suite is completed
-- `check_run:created`: When an individual test is requested
-- `check_run:updated`: When an individual test is updated with new status
-- `check_run:rerequested`: When an individual test is re-requested
+The events emitted by this gateway into Brigade are:
+
+- `check_run`: A check run event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `check_run:completed`: The `status` of a check run was updated to `completed`.
+- `check_run:created`: A new check run was created.
+- `check_run:requested_action`: Someone requested that an action be taken.
+- `check_run:rerequested`: Someone requested to re-run your check run.
+- `check_suite:completed`: The `status` of a check suite was updated to `completed`.
+- `check_suite:requested`: A new check suite was created.
+- `check_suite:rerequested`: Someone requested to re-run your check suite.
+- `commit_comment`: A commit comment event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `commit_comment:created`: A commit comment was created.
+- `create`: A branch or tag was created.
+- `deployment`: A deployment was created.
+- `deployment_status`: A deployment's sdtatus has changed.
+- `pull_request`: A pull request event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `pull_request:assigned`: A pull request was assigned.
+- `pull_request:closed`: A pull request was closed.
+- `pull_request:edited`: A pull request was edited (e.g. title or body is edited).
+- `pull_request:labeled`: A new label was assigned to a pull request.
+- `pull_request:locked`: A pull request was locked.
+- `pull_request:opened`: A new pull request was opened.
+- `pull_request:ready_for_review`: A pull request is ready for review.
+- `pull_request:reopened`: A closed pulled request was re-opened.
+- `pull_request:review_request_removed`: An existing request for pull request review was removed.
+- `pull_request:review_requested`: A pull request review was re-requested.
+- `pull_request:unassigned`: A pull request was unassigned.
+- `pull_request:unlabeled`: A label was removed from a pull request.
+- `pull_request:unlocked`: A pull request was unlocked.
+- `pull_request_review`: A pull request review with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `pull_request_review:submitted`: A pull request review was submitted.
+- `pull_request_review:edited`: A pull request review was edited.
+- `pull_request_review:dismissed`: A pull request review was dismissed.
+- `pull_request_review_comment`: A pull request review comment with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `pull_request_review_comment:created`: A new pull request review comment was created.
+- `pull_request_review_comment:deleted`: An existing pull request review comment was deleted.
+- `pull_request_review_comment:edited`: An existing pull request review comment was edited.
+- `push`: A commit was pushed to a branch or a new tag was applied.
+- `release`: A release event with any `action`. A second event qualified by `action` will _also_ be emitted.
+- `release:created`: A new release was created.
+- `release:deleted`: An existing release was deleted.
+- `release:edited`: An existing release was edited.
+- `release:prereleased`: A release is pre-released.
+- `release:published`: A release is published.
+- `release:unpublished`: A release is unpublished.
+- `status`: The status of a git commit was changed.
+
+Each of these events is described in greater detail in [Github's own API documentation](https://developer.github.com/v3/activity/events/types/).
 
 The `check_suite` events will let you start all of your tests at once, while the
 `check_run` events will let you work with individual tests. The example in the
@@ -213,7 +263,7 @@ run complete. On error, it marks the run failed.
 
 ```javascript
 const {events, Job, Group} = require("brigadier");
-const checkRunImage = "deis/brigade-github-check-run:latest"
+const checkRunImage = "brigadecore/brigade-github-check-run:latest"
 
 events.on("check_suite:requested", checkRequested)
 events.on("check_suite:rerequested", checkRequested)
@@ -312,17 +362,10 @@ $ make docker-build  # to build Docker images
 
 # Contributing
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.microsoft.com.
+This Brigade project accepts contributions via GitHub pull requests. This document outlines the process to help get your contribution accepted.
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+## Signed commits
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
-
-[brigade-charts]: https://github.com/Azure/brigade-charts
-[brigade-github-app-chart]: https://github.com/Azure/brigade-charts/tree/master/charts/brigade-github-app
+A DCO sign-off is required for contributions to repos in the brigadecore org.  See the documentation in
+[Brigade's Contributing guide](https://github.com/brigadecore/brigade/blob/master/CONTRIBUTING.md#signed-commits)
+for how this is done.

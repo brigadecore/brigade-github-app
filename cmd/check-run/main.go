@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/brigade-github-app/pkg/check"
-	"github.com/Azure/brigade-github-app/pkg/webhook"
+	"github.com/brigadecore/brigade-github-app/pkg/check"
+	"github.com/brigadecore/brigade-github-app/pkg/webhook"
 
 	"github.com/google/go-github/github"
 )

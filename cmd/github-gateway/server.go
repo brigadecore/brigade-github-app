@@ -13,9 +13,9 @@ import (
 	gin "gopkg.in/gin-gonic/gin.v1"
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/Azure/brigade/pkg/storage/kube"
+	"github.com/brigadecore/brigade/pkg/storage/kube"
 
-	"github.com/Azure/brigade-github-app/pkg/webhook"
+	"github.com/brigadecore/brigade-github-app/pkg/webhook"
 )
 
 var (
@@ -94,8 +94,9 @@ func main() {
 	}
 
 	ghOpts := webhook.GithubOpts{
-		CheckSuiteOnPR: envOrBool("CHECK_SUITE_ON_PR", true),
-		AppID:          envOrInt("APP_ID", 0),
+		CheckSuiteOnPR:      envOrBool("CHECK_SUITE_ON_PR", true),
+		AppID:               envOrInt("APP_ID", 0),
+		DefaultSharedSecret: os.Getenv("DEFAULT_SHARED_SECRET"),
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)
