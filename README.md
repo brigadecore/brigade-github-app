@@ -43,7 +43,7 @@ https://developer.github.com/apps/building-github-apps/creating-a-github-app/
   - Check run
   - Issue comment (if intending to handle issue or general PR comments)
   - Pull request (if opting to create/rerequest Check suites from incoming PRs)
-  - Push (if needing to handle non-master push events, such as tag pushes)
+  - Push (if needing to handle push events, such as tag pushes)
 - Choose "Only This Account" to connect to the app.
 
 **Once you have submitted** you will be prompted to create a private key. Create
@@ -329,11 +329,22 @@ function checkRequested(e, p) {
 
 ```
 
+## Further Examples
+
+See `docs/examples` for further `brigade.js` examples exercising
+different event handling scenarios, including Issue/PR comment handling,
+(re-)running individual Checks and more.
+
 ### Parameters available on the `check-run` container
 
 The following parameters can be specified via environment variables:
 
-- `CHECK_PAYLOAD` (REQUIRED): The contents of `e.payload`.
+- `CHECK_PAYLOAD` (REQUIRED): The contents of `e.payload`.  Will be used to parse
+  repo name, commit and branch (if not provided by corresponding env vars below),
+  as well as auth token details
+- `CHECK_REPO` (Optional): The full repo name for the project, e.g., `myorg/myrepo`.  Overrides value in `CHECK_PAYLOAD`.
+- `CHECK_COMMIT` (Optional): The commit to use. Overrides value in `CHECK_PAYLOAD`.
+- `CHECK_BRANCH` (Optional): The branch to use. Overrides value in `CHECK_PAYLOAD`.
 - `CHECK_NAME` (default: Brigade): The name of the check. You should set this unless
   you are only running a single check.
 - `CHECK_TITLE` (default: "running check"): The title that will be displayed on GitHub

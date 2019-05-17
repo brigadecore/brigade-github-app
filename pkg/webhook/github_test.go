@@ -45,15 +45,15 @@ func newTestGithubHandler(store storage.Store, t *testing.T) *githubHook {
 		store:          store,
 		allowedAuthors: []string{"OWNER"},
 		getFile: func(commit, path string, proj *brigade.Project) ([]byte, error) {
-						return []byte(""), nil
+			return []byte(""), nil
 		},
 		createStatus: func(commit string, proj *brigade.Project, status *github.RepoStatus) error {
-						return nil
+			return nil
 		},
 		handleIssueCommentEvent: func(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
 			revision := brigade.Revision{
 				Commit: "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-				Ref: "refs/pull/2/head",
+				Ref:    "refs/pull/2/head",
 			}
 			return revision, []byte{}
 		},

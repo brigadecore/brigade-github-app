@@ -315,9 +315,6 @@ func (s *githubHook) handleIssueComment(c *gin.Context, eventType string) {
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
 
-// TODO: getInstallationToken helper
-// TODO: getInstallationTokenClient helper
-
 // handleIssueCommentEvent runs further processing with a given github.IssueCommentEvent,
 // including extracting data from a corresponding Pull Request and adding GitHub App data
 // (App ID, Installation ID, Token, Timeout) to the returned payload body
@@ -347,8 +344,7 @@ func handleIssueCommentEvent(c *gin.Context, s *githubHook, ice *github.IssueCom
 	rev.Commit = pullRequest.Head.GetSHA()
 	rev.Ref = fmt.Sprintf("refs/pull/%d/head", pullRequest.GetNumber())
 
-	var res *Payload
-	res = &Payload{
+	res := &Payload{
 		Body:   ice,
 		AppID:  appID,
 		InstID: int(instID),
