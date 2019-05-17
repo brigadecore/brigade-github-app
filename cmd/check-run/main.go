@@ -25,6 +25,7 @@ func main() {
 	conclusion := envOr("CHECK_CONCLUSION", "")
 	detailsURL := envOr("CHECK_DETAILS_URL", "")
 	externalID := envOr("CHECK_EXTERNAL_ID", "")
+	startedAt := envOr("CHECK_STARTED_AT", time.Now().Format(check.RFC8601))
 
 	// Support for GH Enterprise.
 	ghBaseURL := envOr("GITHUB_BASE_URL", "")
@@ -62,7 +63,7 @@ func main() {
 		Name:       name,
 		HeadBranch: branch,
 		HeadSHA:    commit,
-		StartedAt:  time.Now().Format(check.RFC8601),
+		StartedAt:  startedAt,
 		ExternalID: externalID,
 		DetailsURL: detailsURL,
 		Output: check.Output{
