@@ -333,6 +333,7 @@ The following parameters can be specified via environment variables:
   is typically used with CHECK_CONCLUSION=action_required.
 - `CHECK_EXTERNAL_ID`: An ID that correlates this run to another source. For example,
   it could be set to the Brigade build ID.
+- `CHECK_ACTIONS`: Custom definition of further check run actions displayed as buttons. [See the GitHub documentation on actions](https://developer.github.com/v3/checks/runs/#actions-object)
 - `GITHUB_BASE_URL`: The URL for GitHub Enterprise users.
 - `GITHUB_UPLOAD_URL`: The upload URL for GitHub Enterprise users.
 
