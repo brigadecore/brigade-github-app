@@ -345,17 +345,27 @@ func handleIssueCommentEvent(c *gin.Context, s *githubHook, ice *github.IssueCom
 			gin.H{"status": "failed to fetch pull request for corresponding issue comment"})
 		return rev, body
 	}
+
+	// Populate the brigade.Revision, as per usual
 	rev.Commit = pullRequest.Head.GetSHA()
 	rev.Ref = fmt.Sprintf("refs/pull/%d/head", pullRequest.GetNumber())
 
+	// Here we build/populate Brigade's webhook.Payload object
+	//
+	// Note we also add commit and branch data here, as neither is
+	// included in the github.IssueCommentEvent (here res.Body)
+	// The check run utility that requests check runs requires these values
+	// and does not have access to he brigade.Revision object above.
 	res := &Payload{
-		Body:   ice,
-		AppID:  appID,
-		InstID: int(instID),
-		Type:   "issue_comment",
+		Body:         ice,
+		AppID:        appID,
+		InstID:       int(instID),
+		Type:         "issue_comment",
+		Token:        tok,
+		TokenExpires: timeout,
+		Commit:       rev.Commit,
+		Branch:       rev.Ref,
 	}
-	res.Token = tok
-	res.TokenExpires = timeout
 
 	// Remarshal the body back into JSON
 	pl := map[string]interface{}{}

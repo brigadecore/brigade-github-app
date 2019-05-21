@@ -342,9 +342,6 @@ The following parameters can be specified via environment variables:
 - `CHECK_PAYLOAD` (REQUIRED): The contents of `e.payload`.  Will be used to parse
   repo name, commit and branch (if not provided by corresponding env vars below),
   as well as auth token details
-- `CHECK_REPO` (Optional): The full repo name for the project, e.g., `myorg/myrepo`.  Overrides value in `CHECK_PAYLOAD`.
-- `CHECK_COMMIT` (Optional): The commit to use. Overrides value in `CHECK_PAYLOAD`.
-- `CHECK_BRANCH` (Optional): The branch to use. Overrides value in `CHECK_PAYLOAD`.
 - `CHECK_NAME` (default: Brigade): The name of the check. You should set this unless
   you are only running a single check.
 - `CHECK_TITLE` (default: "running check"): The title that will be displayed on GitHub

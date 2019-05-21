@@ -101,18 +101,6 @@ function checkRun(e, p, check) {
 
   // Common configuration
   const env = {
-    // We explictly set repo, commit and branch values here,
-    // as currently, the Brigade GitHub App attempts to parse these
-    // from the provided payload, expecting it to be of type 'check_suite'
-    // or 'check_run'
-    //
-    // Yet, our payload may be of the form 'issue_comment', if we
-    // are attempting to trigger a check run from an issue/PR comment.
-    // Therefore, we set these values appropriately so that the Brigade
-    // GitHub App doesn't attempt to parse the payload for them.
-    CHECK_REPO: p.repo.name,
-    CHECK_COMMIT: e.revision.commit,
-    CHECK_BRANCH: e.revision.ref,
     CHECK_PAYLOAD: e.payload,
     CHECK_NAME: check.name,
     CHECK_TITLE: `Run ${check.name}`

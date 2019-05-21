@@ -10,4 +10,6 @@ type Payload struct {
 	Body         interface{} `json:"body"`
 	AppID        int         `json:"-"`
 	InstID       int         `json:"-"`
+	Commit       string      `json:"commit"`
+	Branch       string      `json:"branch"`
 }

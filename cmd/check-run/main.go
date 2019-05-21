@@ -17,10 +17,6 @@ import (
 )
 
 func main() {
-	repo := envOr("CHECK_REPO", "")
-	commit := envOr("CHECK_COMMIT", "")
-	branch := envOr("CHECK_BRANCH", "")
-
 	payload := os.Getenv("CHECK_PAYLOAD")
 	name := envOr("CHECK_NAME", "Brigade")
 	title := envOr("CHECK_TITLE", "Running Check")
@@ -50,15 +46,10 @@ func main() {
 	}
 	token := data.Token
 
-	// if one or more of repo, commit, or branch not set in env,
-	// parse from payload body
-	if repo == "" || commit == "" || branch == "" {
-		var err error
-		repo, commit, branch, err = repoCommitBranch(data)
-		if err != nil {
-			fmt.Printf("Error processing data: %s", err)
-			os.Exit(2)
-		}
+	repo, commit, branch, err := repoCommitBranch(data)
+	if err != nil {
+		fmt.Printf("Error processing data: %s", err)
+		os.Exit(2)
 	}
 
 	parts := strings.Split(repo, "/")
@@ -138,6 +129,20 @@ func repoCommitBranch(payload *webhook.Payload) (string, string, string, error) 
 		repo = event.Repo.GetFullName()
 		commit = event.CheckSuite.GetHeadSHA()
 		branch = event.CheckSuite.GetHeadBranch()
+	case "issue_comment":
+		event := &github.IssueCommentEvent{}
+		if err = json.Unmarshal(tmp, event); err != nil {
+			return repo, commit, branch, err
+		}
+		repo = event.Repo.GetFullName()
+		// A github.IssueCommentEvent event does not have commit or branch fields,
+		// therefore, we will expect them to be set on the payload itself
+		if commit = payload.Commit; commit == "" {
+			return repo, commit, branch, fmt.Errorf("commit empty")
+		}
+		if branch = payload.Branch; branch == "" {
+			return repo, commit, branch, fmt.Errorf("branch empty")
+		}
 	default:
 		return repo, commit, branch, fmt.Errorf("unknown payload type %s", payload.Type)
 	}
