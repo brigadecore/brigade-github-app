@@ -317,7 +317,11 @@ func (s *githubHook) handleIssueComment(c *gin.Context, eventType string) {
 
 // handleIssueCommentEvent runs further processing with a given github.IssueCommentEvent,
 // including extracting data from a corresponding Pull Request and adding GitHub App data
-// (App ID, Installation ID, Token, Timeout) to the returned payload body
+// (App ID, Installation ID, Token, Timeout) to the returned payload body.
+//
+// This extra context empowers consumers of the resulting Brigade event with the ability
+// to (re-)trigger actions on the Pull Request itself, such as (re-)running Check Runs,
+// Check Suites or otherwise running jobs that consume/use the PR commit/branch data.
 func handleIssueCommentEvent(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
 	appID := s.opts.AppID
 	instID := ice.Installation.GetID()
