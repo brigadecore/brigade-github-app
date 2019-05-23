@@ -7,12 +7,9 @@ const goImg = "golang:1.11"
 const gopath = "/go"
 const localPath = gopath + `/src/github.com/${projectOrg}/${projectName}`;
 
-const images = [
-  "brigade-github-app",
-  "brigade-github-check-run"
-]
-
 const noop = {run: () => {return Promise.resolve()}}
+
+const releaseTagRegex = /^refs\/tags\/(v[0-9]+(?:\.[0-9]+)*(?:\-.+)?)$/
 
 function build(e, project) {
   // Create a new job to run Go tests
@@ -53,7 +50,7 @@ function goDockerBuild(project, tag) {
     `mkdir -p ${localPath}/bin`,
     `mv /src/* ${localPath}`,
     `cd ${localPath}`,
-    "make build-docker-bins",
+    "make build-all-bins",
     // create share and copy binaries, for use by the dockerhubPublish job
     `mkdir -p /mnt/brigade/share/rootfs`,
     `cp -a ./rootfs/* /mnt/brigade/share/rootfs/`,
@@ -73,16 +70,11 @@ function dockerhubPublish(project, tag) {
   publisher.tasks = [
     "apk add --update --no-cache make",
     `docker login ${dockerRegistry} -u ${project.secrets.dockerhubUsername} -p ${project.secrets.dockerhubPassword}`,
-    "cd /src"
+    "cd /src",
+    "cp -av /mnt/brigade/share/rootfs ./rootfs",
+    `SHELL=/bin/sh DOCKER_REGISTRY=${dockerOrg} VERSION=${tag} make push-all-images`,
+    `docker logout ${dockerRegistry}`
   ];
-
-  for (let i of images) {
-      publisher.tasks.push(
-        `cp -av /mnt/brigade/share/rootfs ./rootfs`,
-        `SHELL=/bin/sh DOCKER_REGISTRY=${dockerOrg} VERSION=${tag} make ${i}-image ${i}-push`
-      );
-  }
-  publisher.tasks.push(`docker logout ${dockerRegistry}`);
 
   return publisher;
 }
@@ -182,25 +174,21 @@ events.on("exec", (e, p) => {
 })
 
 events.on("push", (e, p) => {
-  let release = false;
-  let gitTag = "";
-  let imageTag = "";
-
-  if (e.revision.ref.includes("refs/heads/master")) {
-    release = true;
-    gitTag = "master"
-    imageTag = "latest"
-  } else if (e.revision.ref.startsWith("refs/tags/")) {
-    release = true;
-    let parts = e.revision.ref.split("/", 3)
-    gitTag = parts[2]
-    imageTag = gitTag
-  }
-
-  if (release) {
+  let matchStr = e.revision.ref.match(releaseTagRegex);
+  if (matchStr) {
+    // This is an official release with a semantically versioned tag
+    let matchTokens = Array.from(matchStr);
+    let version = matchTokens[1];
     return Group.runEach([
       goDockerBuild(p, gitTag),
-      dockerhubPublish(p, imageTag)
+      dockerhubPublish(p, version)
+    ]);
+  }
+  if (e.revision.ref.includes("refs/heads/master")) {
+    // This builds and publishes "edge" images
+    return Group.runEach([
+      goDockerBuild(p, gitTag),
+      dockerhubPublish(p, "")
     ]);
   }
 })
@@ -208,18 +196,3 @@ events.on("push", (e, p) => {
 events.on("check_suite:requested", runSuite)
 events.on("check_suite:rerequested", runSuite)
 events.on("check_run:rerequested", runSuite)
-
-events.on("release_images", (e, p) => {
-  /*
-   * Expects JSON of the form {'tag': 'v1.2.3'}
-   */
-  payload = JSON.parse(e.payload)
-  if (!payload.tag) {
-    throw error("No tag specified")
-  }
-
-  Group.runEach([
-    goDockerBuild(p, payload.tag),
-    dockerhubPublish(p, payload.tag)
-  ]);
-})

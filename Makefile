@@ -1,59 +1,35 @@
 SHELL ?= /bin/bash
 
-# The Docker registry where images are pushed.
-# Note that if you use an org (like on Quay and DockerHub), you should
-# include that: quay.io/foo
-DOCKER_REGISTRY    ?= brigadecore
+################################################################################
+# Version details                                                              #
+################################################################################
 
-GIT_TAG   = $(shell git describe --tags --always 2>/dev/null)
-VERSION   ?= ${GIT_TAG}
-IMAGE_TAG ?= ${VERSION}
+GIT_VERSION = $(shell git describe --always --abbrev=7 --dirty)
 
-BINS = github-gateway check-run
-IMAGES = brigade-github-app brigade-github-check-run
+################################################################################
+# Docker images we build and publish                                           #
+################################################################################
 
-.PHONY: build
-build: $(BINS)
+ifdef DOCKER_REGISTRY
+	DOCKER_REGISTRY := $(DOCKER_REGISTRY)/
+else
+	DOCKER_REGISTRY := brigadecore/
+endif
 
-.PHONY: $(BINS)
-$(BINS): bootstrap
-	go build -o bin/$@ ./cmd/$@
+ifdef VERSION
+	IMMUTABLE_DOCKER_TAG := $(VERSION)
+	MUTABLE_DOCKER_TAG   := latest
+else
+	IMMUTABLE_DOCKER_TAG := $(GIT_VERSION)
+	MUTABLE_DOCKER_TAG   := edge
+endif
 
-# Cross-compile for Docker+Linux
-.PHONY: build-docker-bins
-build-docker-bins: $(addsuffix -docker-bin,$(BINS))
-
-%-docker-bin: bootstrap
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o ./rootfs/$* ./cmd/$*
-
-# To use docker-build, you need to have Docker installed and configured. You should also set
-# DOCKER_REGISTRY to your own personal registry if you are not pushing to the official upstream.
-.PHONY: docker-build
-docker-build: build-docker-bins
-docker-build: $(addsuffix -image,$(IMAGES))
-
-%-image:
-	docker build -f Dockerfile.$* -t $(DOCKER_REGISTRY)/$*:$(IMAGE_TAG) .
-
-# You must be logged into DOCKER_REGISTRY before you can push.
-.PHONY: docker-push
-docker-push: $(addsuffix -push,$(IMAGES))
-
-%-push:
-	docker push $(DOCKER_REGISTRY)/$*:$(IMAGE_TAG)
-
-.PHONY: lint
-lint:
-	golangci-lint run --config ./golangci.yml
-
-.PHONY: test
-test:
-	go test ./pkg/...
+################################################################################
+# Utility targets                                                              #
+################################################################################
 
 .PHONY: redeploy
-redeploy: test
-redeploy: docker-build
-redeploy: docker-push
+redeploy: test push-all-images
 redeploy:
 	kubectl delete `kubectl get po -l app=github-app-test-brigade-github-app -o name`
 	@echo 'Waiting for pod to start... (20 seconds)'
@@ -72,3 +48,49 @@ ifndef HAS_GOLANGCI
 	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(GOPATH)/bin
 endif
 	dep ensure
+
+################################################################################
+# Tests                                                                        #
+################################################################################
+
+.PHONY: lint
+lint:
+	golangci-lint run --config ./golangci.yml
+
+.PHONY: test
+test:
+	go test ./pkg/...
+
+################################################################################
+# Build / Publish                                                              #
+################################################################################
+
+BINS := github-gateway check-run
+IMAGES = brigade-github-app brigade-github-check-run
+
+# Cross-compile for Docker+Linux
+.PHONY: build-all-bins
+build-all-bins: $(addsuffix -build-bin,$(BINS))
+
+%-build-bin: bootstrap
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./rootfs/$* ./cmd/$*
+
+# To use build-all-images, you need to have Docker installed and configured. You
+# should also set DOCKER_REGISTRY to your own personal registry if you are not
+# pushing to the official upstream.
+.PHONY: build-all-images
+build-all-images: build-all-bins
+build-all-images: $(addsuffix -build-image,$(IMAGES))
+
+%-build-image:
+	docker build -f Dockerfile.$* -t $(DOCKER_REGISTRY)$*:$(IMMUTABLE_DOCKER_TAG) .
+	docker tag $(DOCKER_REGISTRY)$*:$(IMMUTABLE_DOCKER_TAG) $(DOCKER_REGISTRY)$*:$(MUTABLE_DOCKER_TAG)
+
+# You must be logged into DOCKER_REGISTRY before you can push.
+.PHONY: push-all-images
+push-all-images: build-all-images
+push-all-images: $(addsuffix -push-image,$(IMAGES))
+
+%-push-image:
+	docker push $(DOCKER_REGISTRY)$*:$(IMMUTABLE_DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)$*:$(MUTABLE_DOCKER_TAG)
