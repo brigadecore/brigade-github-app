@@ -9,6 +9,26 @@ SHELL ?= /bin/bash
 GIT_VERSION = $(shell git describe --always --abbrev=7 --dirty)
 
 ################################################################################
+# Go build details                                                             #
+################################################################################
+
+BASE_PACKAGE_NAME := github.com/brigadecore/brigade-github-app
+
+################################################################################
+# Containerized development environment-- or lack thereof                      #
+################################################################################
+
+ifneq ($(SKIP_DOCKER),true)
+	DEV_IMAGE := quay.io/deis/lightweight-docker-go:v0.6.0
+	DOCKER_CMD := docker run \
+		-it \
+		--rm \
+		-e SKIP_DOCKER=true \
+		-v $$(pwd):/go/src/$(BASE_PACKAGE_NAME) \
+		-w /go/src/$(BASE_PACKAGE_NAME) $(DEV_IMAGE)
+endif
+
+################################################################################
 # Docker images we build and publish                                           #
 ################################################################################
 
@@ -38,18 +58,9 @@ redeploy:
 	sleep 20
 	kubectl logs -f `kubectl get po -l app=github-app-test-brigade-github-app -o name | tail -n 1 | sed 's/pod\///'`
 
-HAS_DEP          := $(shell command -v dep;)
-HAS_GOLANGCI     := $(shell command -v golangci-lint;)
-
 .PHONY: bootstrap
 bootstrap:
-ifndef HAS_DEP
-	curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-endif
-ifndef HAS_GOLANGCI
-	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(GOPATH)/bin
-endif
-	dep ensure
+	$(DOCKER_CMD) dep ensure
 
 ################################################################################
 # Tests                                                                        #
@@ -57,11 +68,11 @@ endif
 
 .PHONY: lint
 lint:
-	golangci-lint run --config ./golangci.yml
+	$(DOCKER_CMD) golangci-lint run --config ./golangci.yml
 
 .PHONY: test
 test:
-	go test ./pkg/...
+	$(DOCKER_CMD) go test ./pkg/...
 
 ################################################################################
 # Build / Publish                                                              #
@@ -75,7 +86,7 @@ IMAGES = brigade-github-app brigade-github-check-run
 build-all-bins: $(addsuffix -build-bin,$(BINS))
 
 %-build-bin: bootstrap
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./rootfs/$* ./cmd/$*
+	$(DOCKER_CMD) sh -c 'GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./rootfs/$* ./cmd/$*'
 
 # To use build-all-images, you need to have Docker installed and configured. You
 # should also set DOCKER_REGISTRY to your own personal registry if you are not

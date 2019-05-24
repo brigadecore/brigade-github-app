@@ -3,7 +3,7 @@ const { events, Job, Group } = require("brigadier")
 const projectOrg = "brigadecore"
 const projectName = "brigade-github-app"
 
-const goImg = "golang:1.11"
+const goImg = "quay.io/deis/lightweight-docker-go:v0.6.0"
 const gopath = "/go"
 const localPath = gopath + `/src/github.com/${projectOrg}/${projectName}`;
 
@@ -17,6 +17,7 @@ function build(e, project) {
 
   // Set a few environment variables.
   build.env = {
+      "SKIP_DOCKER": "true",
       "DEST_PATH": localPath,
       "GOPATH": gopath
   };
@@ -42,6 +43,7 @@ function goDockerBuild(project, tag) {
 
   goBuild.storage.enabled = true;
   goBuild.env = {
+    "SKIP_DOCKER": "true",
     "DEST_PATH": localPath,
     "GOPATH": gopath
   };
