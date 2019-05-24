@@ -11,25 +11,19 @@ const noop = {run: () => {return Promise.resolve()}}
 
 const releaseTagRegex = /^refs\/tags\/(v[0-9]+(?:\.[0-9]+)*(?:\-.+)?)$/
 
-function test(e, project) {
+function test() {
   // Create a new job to run Go tests
-  var job = new Job(`${projectName}-build`, goImg);
-
+  var job = new Job("tests", goImg);
+  job.mountPath = localPath;
   // Set a few environment variables.
   job.env = {
       "SKIP_DOCKER": "true"
   };
-
   // Run Go unit tests
   job.tasks = [
-    // Need to move the source into GOPATH so vendor/ works as desired.
-    `mkdir -p ${localPath}`,
-    `cp -a /src/* ${localPath}`,
-    `cp -a /src/.git ${localPath}`,
     `cd ${localPath}`,
     "make verify-vendored-code lint test"
   ];
-
   return job
 }
 
@@ -53,8 +47,13 @@ function buildAndPublishImages(project, version) {
 // Here we can add additional Check Runs, which will run in parallel and
 // report their results independently to GitHub
 function runSuite(e, p) {
-  // For now, this is the one-stop shop running build, lint and test targets
-  runTests(e, p).catch(err => {console.error(err.toString())});
+  // For the master branch, we build and publish images in response to the push
+  // event. We test as a precondition for doing that, so we DON'T test here
+  // for the master branch.
+  if (e.revision.ref != "master") {
+    // For now, this is the one-stop shop running build, lint and test targets
+    runTests(e, p).catch(err => {console.error(err.toString())});
+  }
 }
 
 // runTests is a Check Run that is run as part of a Checks Suite
@@ -69,7 +68,7 @@ function runTests(e, p) {
   note.text = "This test will ensure build, linting and tests all pass."
 
   // Send notification, then run, then send pass/fail notification
-  return notificationWrap(test(e, p), note)
+  return notificationWrap(test(), note)
 }
 
 // A GitHub Check Suite notification
@@ -95,7 +94,7 @@ class Notification {
   // Send a new notification, and return a Promise<result>.
   run() {
       this.count++
-      var j = new Job(`${ this.name }-${ this.count }`, "brigadecore/brigade-github-check-run:latest");
+      var j = new Job(`${ this.name }-notification-${ this.count }`, "brigadecore/brigade-github-check-run:latest");
       j.imageForcePull = true;
       j.env = {
           CHECK_CONCLUSION: this.conclusion,
@@ -150,11 +149,20 @@ events.on("push", (e, p) => {
     // This is an official release with a semantically versioned tag
     let matchTokens = Array.from(matchStr);
     let version = matchTokens[1];
-    return buildAndPublishImages(p, version).run();
+    buildAndPublishImages(p, version).run()
+    .catch((err) => {
+      console.error(err.toString());
+    });
   }
-  if (e.revision.ref.includes("refs/heads/master")) {
-    // This builds and publishes "edge" images
-    return buildAndPublishImages(p, "").run();
+  if (e.revision.ref == "refs/heads/master") {
+    // This runs tests then builds and publishes "edge" images
+    test().run()
+    .then(() => {
+      buildAndPublishImages(p, "").run();
+    })
+    .catch((err) => {
+      console.error(err.toString());
+    });
   }
 })
 
