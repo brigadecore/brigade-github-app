@@ -1,6 +1,6 @@
 SHELL ?= /bin/bash
 
-.DEFAULT_GOAL := test
+.DEFAULT_GOAL := build
 
 ################################################################################
 # Version details                                                              #
@@ -84,21 +84,15 @@ test:
 # Build / Publish                                                              #
 ################################################################################
 
-BINS := github-gateway check-run
 IMAGES = brigade-github-app brigade-github-check-run
 
-# Cross-compile for Docker+Linux
-.PHONY: build-all-bins
-build-all-bins: $(addsuffix -build-bin,$(BINS))
-
-%-build-bin:
-	$(DOCKER_CMD) sh -c 'GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./rootfs/$* ./cmd/$*'
+.PHONY: build
+build: build-all-images
 
 # To use build-all-images, you need to have Docker installed and configured. You
 # should also set DOCKER_REGISTRY to your own personal registry if you are not
 # pushing to the official upstream.
 .PHONY: build-all-images
-build-all-images: build-all-bins
 build-all-images: $(addsuffix -build-image,$(IMAGES))
 
 %-build-image:

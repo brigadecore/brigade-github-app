@@ -11,19 +11,17 @@ const noop = {run: () => {return Promise.resolve()}}
 
 const releaseTagRegex = /^refs\/tags\/(v[0-9]+(?:\.[0-9]+)*(?:\-.+)?)$/
 
-function build(e, project) {
+function test(e, project) {
   // Create a new job to run Go tests
-  var build = new Job(`${projectName}-build`, goImg);
+  var job = new Job(`${projectName}-build`, goImg);
 
   // Set a few environment variables.
-  build.env = {
-      "SKIP_DOCKER": "true",
-      "DEST_PATH": localPath,
-      "GOPATH": gopath
+  job.env = {
+      "SKIP_DOCKER": "true"
   };
 
   // Run Go unit tests
-  build.tasks = [
+  job.tasks = [
     // Need to move the source into GOPATH so vendor/ works as desired.
     `mkdir -p ${localPath}`,
     `cp -a /src/* ${localPath}`,
@@ -32,51 +30,24 @@ function build(e, project) {
     "make verify-vendored-code lint test"
   ];
 
-  return build
+  return job
 }
 
-function goDockerBuild(project, tag) {
-  // We build in a separate pod b/c AKS's Docker is too old to do multi-stage builds.
-  const goBuild = new Job(`${projectName}-docker-build`, goImg);
-
-  goBuild.storage.enabled = true;
-  goBuild.env = {
-    "SKIP_DOCKER": "true",
-    "DEST_PATH": localPath,
-    "GOPATH": gopath
-  };
-  goBuild.tasks = [
-    `cd /src && git checkout ${tag}`,
-    `mkdir -p ${localPath}/bin`,
-    `mv /src/* ${localPath}`,
-    `cd ${localPath}`,
-    "make build-all-bins",
-    // create share and copy binaries, for use by the dockerhubPublish job
-    `mkdir -p /mnt/brigade/share/rootfs`,
-    `cp -a ./rootfs/* /mnt/brigade/share/rootfs/`,
-    "ls -lah /mnt/brigade/share"
-  ];
-
-  return goBuild;
-}
-
-function dockerhubPublish(project, tag) {
-  const publisher = new Job("dockerhub-publish", "docker");
+function buildAndPublishImages(project, version) {
   let dockerRegistry = project.secrets.dockerhubRegistry || "docker.io";
   let dockerOrg = project.secrets.dockerhubOrg || "brigadecore";
-
-  publisher.docker.enabled = true;
-  publisher.storage.enabled = true;
-  publisher.tasks = [
-    "apk add --update --no-cache make",
-    `docker login ${dockerRegistry} -u ${project.secrets.dockerhubUsername} -p ${project.secrets.dockerhubPassword}`,
+  var job = new Job("build-and-publish-images", "docker:stable-dind");
+  job.privileged = true;
+  job.tasks = [
+    "apk add --update --no-cache make git",
+    "dockerd-entrypoint.sh &",
+    "sleep 20",
     "cd /src",
-    "cp -av /mnt/brigade/share/rootfs ./rootfs",
-    `SHELL=/bin/sh DOCKER_REGISTRY=${dockerOrg} VERSION=${tag} make push-all-images`,
+    `docker login ${dockerRegistry} -u ${project.secrets.dockerhubUsername} -p ${project.secrets.dockerhubPassword}`,
+    `DOCKER_REGISTRY=${dockerOrg} VERSION=${version} make build-all-images push-all-images`,
     `docker logout ${dockerRegistry}`
   ];
-
-  return publisher;
+  return job;
 }
 
 // Here we can add additional Check Runs, which will run in parallel and
@@ -86,7 +57,7 @@ function runSuite(e, p) {
   runTests(e, p).catch(err => {console.error(err.toString())});
 }
 
-// runTests is a Check Run that is ran as part of a Checks Suite
+// runTests is a Check Run that is run as part of a Checks Suite
 function runTests(e, p) {
   console.log("Check requested")
 
@@ -98,7 +69,7 @@ function runTests(e, p) {
   note.text = "This test will ensure build, linting and tests all pass."
 
   // Send notification, then run, then send pass/fail notification
-  return notificationWrap(build(e, p), note)
+  return notificationWrap(test(e, p), note)
 }
 
 // A GitHub Check Suite notification
@@ -170,7 +141,7 @@ async function notificationWrap(job, note, conclusion) {
 }
 
 events.on("exec", (e, p) => {
-  return build(e, p).run()
+  return test(e, p).run()
 })
 
 events.on("push", (e, p) => {
@@ -179,17 +150,11 @@ events.on("push", (e, p) => {
     // This is an official release with a semantically versioned tag
     let matchTokens = Array.from(matchStr);
     let version = matchTokens[1];
-    return Group.runEach([
-      goDockerBuild(p, gitTag),
-      dockerhubPublish(p, version)
-    ]);
+    return buildAndPublishImages(p, version).run();
   }
   if (e.revision.ref.includes("refs/heads/master")) {
     // This builds and publishes "edge" images
-    return Group.runEach([
-      goDockerBuild(p, gitTag),
-      dockerhubPublish(p, "")
-    ]);
+    return buildAndPublishImages(p, "").run();
   }
 })
 
