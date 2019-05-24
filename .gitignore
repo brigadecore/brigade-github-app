@@ -1,7 +1,6 @@
 /bin/
 /rootfs/github-gateway
 /rootfs/check-run
-/vendor/
 node_modules/
 
 

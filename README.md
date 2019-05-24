@@ -347,19 +347,48 @@ You can observe these in action on this screenshot:
 
 Prerequisites:
 
-- The Go tool chain
-- `dep` for Go dependency management
 - `make`
 - Docker
 
 To build from source:
 
 ```console
-$ dep ensure         # to install dependencies into vendor/
 $ make lint          # to run linters
 $ make test          # to run tests
-$ make build         # to build local binaries
-$ make docker-build  # to build Docker images
+$ make build         # to run multi-stage Docker build of binaries and images
+```
+
+## Pushing Images
+
+By default, built images are named using the following scheme:
+`<component>:<version>`. If you wish to push customized or experimental images
+you have built from source to a particular org on a particular Docker registry,
+this can be controlled with environment variables.
+
+The following, for instance, will build images that can be pushed to the
+`krancour` org on Dockerhub (the registry that is implied when none is
+specified).
+
+```console
+$ DOCKER_ORG=krancour make build
+```
+
+To build for the `krancour` org on a different registry, such as `quay.io`:
+
+```console
+$ DOCKER_REGISTRY=quay.io DOCKER_ORG=krancour make build
+```
+
+Images built with names that specify registries and orgs for which you have
+write access can be pushed using `make push`. Note that the `build` target is
+a dependency for the `push` target, so the build _and_ push processes can be
+accomplished together like so:
+
+Note also that you _must_ be logged into the registry in question _before_
+attempting this.
+
+```console
+$ DOCKER_REGISTRY=quay.io DOCKER_ORG=krancour make push
 ```
 
 # Contributing

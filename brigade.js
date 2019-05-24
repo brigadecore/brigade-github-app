@@ -3,98 +3,60 @@ const { events, Job, Group } = require("brigadier")
 const projectOrg = "brigadecore"
 const projectName = "brigade-github-app"
 
-const goImg = "golang:1.11"
+const goImg = "quay.io/deis/lightweight-docker-go:v0.6.0"
 const gopath = "/go"
 const localPath = gopath + `/src/github.com/${projectOrg}/${projectName}`;
 
-const images = [
-  "brigade-github-app",
-  "brigade-github-check-run"
-]
-
 const noop = {run: () => {return Promise.resolve()}}
 
-function build(e, project) {
+const releaseTagRegex = /^refs\/tags\/(v[0-9]+(?:\.[0-9]+)*(?:\-.+)?)$/
+
+function test() {
   // Create a new job to run Go tests
-  var build = new Job(`${projectName}-build`, goImg);
-
+  var job = new Job("tests", goImg);
+  job.mountPath = localPath;
   // Set a few environment variables.
-  build.env = {
-      "DEST_PATH": localPath,
-      "GOPATH": gopath
+  job.env = {
+      "SKIP_DOCKER": "true"
   };
-
   // Run Go unit tests
-  build.tasks = [
-    // Need to move the source into GOPATH so vendor/ works as desired.
-    `mkdir -p ${localPath}`,
-    `cp -a /src/* ${localPath}`,
-    `cp -a /src/.git ${localPath}`,
+  job.tasks = [
     `cd ${localPath}`,
-    "make bootstrap",
-    "make lint",
-    "make test"
+    "make verify-vendored-code lint test"
   ];
-
-  return build
+  return job
 }
 
-function goDockerBuild(project, tag) {
-  // We build in a separate pod b/c AKS's Docker is too old to do multi-stage builds.
-  const goBuild = new Job(`${projectName}-docker-build`, goImg);
-
-  goBuild.storage.enabled = true;
-  goBuild.env = {
-    "DEST_PATH": localPath,
-    "GOPATH": gopath
-  };
-  goBuild.tasks = [
-    `cd /src && git checkout ${tag}`,
-    `mkdir -p ${localPath}/bin`,
-    `mv /src/* ${localPath}`,
-    `cd ${localPath}`,
-    "make build-docker-bins",
-    // create share and copy binaries, for use by the dockerhubPublish job
-    `mkdir -p /mnt/brigade/share/rootfs`,
-    `cp -a ./rootfs/* /mnt/brigade/share/rootfs/`,
-    "ls -lah /mnt/brigade/share"
-  ];
-
-  return goBuild;
-}
-
-function dockerhubPublish(project, tag) {
-  const publisher = new Job("dockerhub-publish", "docker");
+function buildAndPublishImages(project, version) {
   let dockerRegistry = project.secrets.dockerhubRegistry || "docker.io";
   let dockerOrg = project.secrets.dockerhubOrg || "brigadecore";
-
-  publisher.docker.enabled = true;
-  publisher.storage.enabled = true;
-  publisher.tasks = [
-    "apk add --update --no-cache make",
+  var job = new Job("build-and-publish-images", "docker:stable-dind");
+  job.privileged = true;
+  job.tasks = [
+    "apk add --update --no-cache make git",
+    "dockerd-entrypoint.sh &",
+    "sleep 20",
+    "cd /src",
     `docker login ${dockerRegistry} -u ${project.secrets.dockerhubUsername} -p ${project.secrets.dockerhubPassword}`,
-    "cd /src"
+    `DOCKER_REGISTRY=${dockerRegistry} DOCKER_ORG=${dockerOrg} VERSION=${version} make build-all-images push-all-images`,
+    `docker logout ${dockerRegistry}`
   ];
-
-  for (let i of images) {
-      publisher.tasks.push(
-        `cp -av /mnt/brigade/share/rootfs ./rootfs`,
-        `SHELL=/bin/sh DOCKER_REGISTRY=${dockerOrg} VERSION=${tag} make ${i}-image ${i}-push`
-      );
-  }
-  publisher.tasks.push(`docker logout ${dockerRegistry}`);
-
-  return publisher;
+  return job;
 }
 
 // Here we can add additional Check Runs, which will run in parallel and
 // report their results independently to GitHub
 function runSuite(e, p) {
-  // For now, this is the one-stop shop running build, lint and test targets
-  runTests(e, p).catch(err => {console.error(err.toString())});
+  // For the master branch, we build and publish images in response to the push
+  // event. We test as a precondition for doing that, so we DON'T test here
+  // for the master branch.
+  if (e.revision.ref != "master") {
+    // For now, this is the one-stop shop running build, lint and test targets
+    runTests(e, p).catch(err => {console.error(err.toString())});
+  }
 }
 
-// runTests is a Check Run that is ran as part of a Checks Suite
+// runTests is a Check Run that is run as part of a Checks Suite
 function runTests(e, p) {
   console.log("Check requested")
 
@@ -106,7 +68,7 @@ function runTests(e, p) {
   note.text = "This test will ensure build, linting and tests all pass."
 
   // Send notification, then run, then send pass/fail notification
-  return notificationWrap(build(e, p), note)
+  return notificationWrap(test(), note)
 }
 
 // A GitHub Check Suite notification
@@ -132,7 +94,7 @@ class Notification {
   // Send a new notification, and return a Promise<result>.
   run() {
       this.count++
-      var j = new Job(`${ this.name }-${ this.count }`, "brigadecore/brigade-github-check-run:latest");
+      var j = new Job(`${ this.name }-notification-${ this.count }`, "brigadecore/brigade-github-check-run:latest");
       j.imageForcePull = true;
       j.env = {
           CHECK_CONCLUSION: this.conclusion,
@@ -178,48 +140,32 @@ async function notificationWrap(job, note, conclusion) {
 }
 
 events.on("exec", (e, p) => {
-  return build(e, p).run()
+  return test(e, p).run()
 })
 
 events.on("push", (e, p) => {
-  let release = false;
-  let gitTag = "";
-  let imageTag = "";
-
-  if (e.revision.ref.includes("refs/heads/master")) {
-    release = true;
-    gitTag = "master"
-    imageTag = "latest"
-  } else if (e.revision.ref.startsWith("refs/tags/")) {
-    release = true;
-    let parts = e.revision.ref.split("/", 3)
-    gitTag = parts[2]
-    imageTag = gitTag
+  let matchStr = e.revision.ref.match(releaseTagRegex);
+  if (matchStr) {
+    // This is an official release with a semantically versioned tag
+    let matchTokens = Array.from(matchStr);
+    let version = matchTokens[1];
+    buildAndPublishImages(p, version).run()
+    .catch((err) => {
+      console.error(err.toString());
+    });
   }
-
-  if (release) {
-    return Group.runEach([
-      goDockerBuild(p, gitTag),
-      dockerhubPublish(p, imageTag)
-    ]);
+  if (e.revision.ref == "refs/heads/master") {
+    // This runs tests then builds and publishes "edge" images
+    test().run()
+    .then(() => {
+      buildAndPublishImages(p, "").run();
+    })
+    .catch((err) => {
+      console.error(err.toString());
+    });
   }
 })
 
 events.on("check_suite:requested", runSuite)
 events.on("check_suite:rerequested", runSuite)
 events.on("check_run:rerequested", runSuite)
-
-events.on("release_images", (e, p) => {
-  /*
-   * Expects JSON of the form {'tag': 'v1.2.3'}
-   */
-  payload = JSON.parse(e.payload)
-  if (!payload.tag) {
-    throw error("No tag specified")
-  }
-
-  Group.runEach([
-    goDockerBuild(p, payload.tag),
-    dockerhubPublish(p, payload.tag)
-  ]);
-})
