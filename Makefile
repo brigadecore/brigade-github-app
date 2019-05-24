@@ -70,7 +70,7 @@ dep:
 # Tests                                                                        #
 ################################################################################
 
-# Verifies there are no disrepancies between desired dependencies and the
+# Verifies there are no discrepancies between desired dependencies and the
 # tracked, vendored dependencies
 .PHONY: verify-vendored-code
 verify-vendored-code:
