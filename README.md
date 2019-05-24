@@ -358,6 +358,34 @@ $ make test          # to run tests
 $ make build         # to run multi-stage Docker build of binaries and images
 ```
 
+## Pushing Images
+
+By default, built images are named using the following scheme:
+`brigadecore/<component>:<version>`. If you wish to push customized or
+experimental images you have built from source to a Docker registry, this can be
+problematic because most contributors do not have write access to the
+`brigadecore` organization on Dockerhub (which is the implied registry) and even
+those who do have that level of access should not manually push to there.
+
+To customize the names of images, use the `DOCKER_REGISTRY` and `DOCKER_ORG`
+environment variables. For instance:
+
+```console
+$ DOCKER_REGISTRY=quay.io DOCKER_ORG=krancour make build
+```
+
+The command above will produce images named like
+`quay.io/krancour/<component>:<version`.
+
+Images built with names that specify registries and orgs for which you have
+write access can be pushed using `make push`. Note that the `build` target is
+a dependency for the `push` target, so the build _and_ push processes can be
+accomplished together like so:
+
+```console
+$ DOCKER_REGISTRY=quay.io DOCKER_ORG=krancour make push
+```
+
 # Contributing
 
 This Brigade project accepts contributions via GitHub pull requests. This document outlines the process to help get your contribution accepted.

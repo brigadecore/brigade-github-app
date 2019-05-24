@@ -105,6 +105,9 @@ build-all-images: $(addsuffix -build-image,$(IMAGES))
 	docker build -f Dockerfile.$* -t $(DOCKER_IMAGE_PREFIX)$*:$(IMMUTABLE_DOCKER_TAG) .
 	docker tag $(DOCKER_IMAGE_PREFIX)$*:$(IMMUTABLE_DOCKER_TAG) $(DOCKER_IMAGE_PREFIX)$*:$(MUTABLE_DOCKER_TAG)
 
+.PHONY: push
+push: push-all-images
+
 # You must be logged into DOCKER_REGISTRY before you can push.
 .PHONY: push-all-images
 push-all-images: build-all-images
