@@ -347,19 +347,15 @@ You can observe these in action on this screenshot:
 
 Prerequisites:
 
-- The Go tool chain
-- `dep` for Go dependency management
 - `make`
 - Docker
 
 To build from source:
 
 ```console
-$ dep ensure         # to install dependencies into vendor/
 $ make lint          # to run linters
 $ make test          # to run tests
-$ make build         # to build local binaries
-$ make docker-build  # to build Docker images
+$ make build         # to run multi-stage Docker build of binaries and images
 ```
 
 # Contributing
