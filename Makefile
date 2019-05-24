@@ -34,9 +34,15 @@ endif
 
 ifdef DOCKER_REGISTRY
 	DOCKER_REGISTRY := $(DOCKER_REGISTRY)/
-else
-	DOCKER_REGISTRY := brigadecore/
 endif
+
+ifdef DOCKER_ORG
+	DOCKER_ORG := $(DOCKER_ORG)/
+else
+	DOCKER_ORG := brigadecore/
+endif
+
+DOCKER_IMAGE_PREFIX := $(DOCKER_REGISTRY)$(DOCKER_ORG)
 
 ifdef VERSION
 	IMMUTABLE_DOCKER_TAG := $(VERSION)
@@ -90,14 +96,14 @@ IMAGES = brigade-github-app brigade-github-check-run
 build: build-all-images
 
 # To use build-all-images, you need to have Docker installed and configured. You
-# should also set DOCKER_REGISTRY to your own personal registry if you are not
-# pushing to the official upstream.
+# should also set DOCKER_REGISTRY and DOCKER_ORG to your own personal registry
+# if you are not pushing to the official upstream.
 .PHONY: build-all-images
 build-all-images: $(addsuffix -build-image,$(IMAGES))
 
 %-build-image:
-	docker build -f Dockerfile.$* -t $(DOCKER_REGISTRY)$*:$(IMMUTABLE_DOCKER_TAG) .
-	docker tag $(DOCKER_REGISTRY)$*:$(IMMUTABLE_DOCKER_TAG) $(DOCKER_REGISTRY)$*:$(MUTABLE_DOCKER_TAG)
+	docker build -f Dockerfile.$* -t $(DOCKER_IMAGE_PREFIX)$*:$(IMMUTABLE_DOCKER_TAG) .
+	docker tag $(DOCKER_IMAGE_PREFIX)$*:$(IMMUTABLE_DOCKER_TAG) $(DOCKER_IMAGE_PREFIX)$*:$(MUTABLE_DOCKER_TAG)
 
 # You must be logged into DOCKER_REGISTRY before you can push.
 .PHONY: push-all-images
@@ -105,5 +111,5 @@ push-all-images: build-all-images
 push-all-images: $(addsuffix -push-image,$(IMAGES))
 
 %-push-image:
-	docker push $(DOCKER_REGISTRY)$*:$(IMMUTABLE_DOCKER_TAG)
-	docker push $(DOCKER_REGISTRY)$*:$(MUTABLE_DOCKER_TAG)
+	docker push $(DOCKER_IMAGE_PREFIX)$*:$(IMMUTABLE_DOCKER_TAG)
+	docker push $(DOCKER_IMAGE_PREFIX)$*:$(MUTABLE_DOCKER_TAG)

@@ -44,7 +44,7 @@ function buildAndPublishImages(project, version) {
     "sleep 20",
     "cd /src",
     `docker login ${dockerRegistry} -u ${project.secrets.dockerhubUsername} -p ${project.secrets.dockerhubPassword}`,
-    `DOCKER_REGISTRY=${dockerOrg} VERSION=${version} make build-all-images push-all-images`,
+    `DOCKER_REGISTRY=${dockerRegistry} DOCKER_ORG=${dockerOrg} VERSION=${version} make build-all-images push-all-images`,
     `docker logout ${dockerRegistry}`
   ];
   return job;
