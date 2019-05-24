@@ -38,8 +38,6 @@ endif
 
 ifdef DOCKER_ORG
 	DOCKER_ORG := $(DOCKER_ORG)/
-else
-	DOCKER_ORG := brigadecore/
 endif
 
 DOCKER_IMAGE_PREFIX := $(DOCKER_REGISTRY)$(DOCKER_ORG)
