@@ -29,9 +29,7 @@ function build(e, project) {
     `cp -a /src/* ${localPath}`,
     `cp -a /src/.git ${localPath}`,
     `cd ${localPath}`,
-    "make bootstrap",
-    "make lint",
-    "make test"
+    "make verify-vendored-code lint test"
   ];
 
   return build

@@ -58,13 +58,19 @@ redeploy:
 	sleep 20
 	kubectl logs -f `kubectl get po -l app=github-app-test-brigade-github-app -o name | tail -n 1 | sed 's/pod\///'`
 
-.PHONY: bootstrap
-bootstrap:
-	$(DOCKER_CMD) dep ensure
+.PHONY: dep
+dep:
+	$(DOCKER_CMD) dep ensure -v
 
 ################################################################################
 # Tests                                                                        #
 ################################################################################
+
+# Verifies there are no disrepancies between desired dependencies and the
+# tracked, vendored dependencies
+.PHONY: verify-vendored-code
+verify-vendored-code:
+	$(DOCKER_CMD) dep check
 
 .PHONY: lint
 lint:
@@ -85,7 +91,7 @@ IMAGES = brigade-github-app brigade-github-check-run
 .PHONY: build-all-bins
 build-all-bins: $(addsuffix -build-bin,$(BINS))
 
-%-build-bin: bootstrap
+%-build-bin:
 	$(DOCKER_CMD) sh -c 'GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./rootfs/$* ./cmd/$*'
 
 # To use build-all-images, you need to have Docker installed and configured. You
