@@ -45,8 +45,8 @@ func main() {
 		fmt.Printf("Error: could not parse payload: %s\n", err)
 		os.Exit(1)
 	}
-
 	token := data.Token
+
 	repo, commit, branch, err := repoCommitBranch(data)
 	if err != nil {
 		fmt.Printf("Error processing data: %s", err)
@@ -130,6 +130,20 @@ func repoCommitBranch(payload *webhook.Payload) (string, string, string, error) 
 		repo = event.Repo.GetFullName()
 		commit = event.CheckSuite.GetHeadSHA()
 		branch = event.CheckSuite.GetHeadBranch()
+	case "issue_comment":
+		event := &github.IssueCommentEvent{}
+		if err = json.Unmarshal(tmp, event); err != nil {
+			return repo, commit, branch, err
+		}
+		repo = event.Repo.GetFullName()
+		// A github.IssueCommentEvent event does not have commit or branch fields,
+		// therefore, we will expect them to be set on the payload itself
+		if commit = payload.Commit; commit == "" {
+			return repo, commit, branch, fmt.Errorf("commit empty")
+		}
+		if branch = payload.Branch; branch == "" {
+			return repo, commit, branch, fmt.Errorf("branch empty")
+		}
 	default:
 		return repo, commit, branch, fmt.Errorf("unknown payload type %s", payload.Type)
 	}

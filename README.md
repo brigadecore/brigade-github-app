@@ -39,7 +39,11 @@ https://developer.github.com/apps/building-github-apps/creating-a-github-app/
   - Commit Statuses: Read And Write
   - Checks: Read and Write
 - Subscribe to the following webhooks:
-  - checks suite
+  - Check suite
+  - Check run
+  - Issue comment (if intending to handle issue or general PR comments)
+  - Pull request (if opting to create/rerequest Check suites from incoming PRs)
+  - Push (if needing to handle push events, such as tag pushes)
 - Choose "Only This Account" to connect to the app.
 
 **Once you have submitted** you will be prompted to create a private key. Create
@@ -213,6 +217,10 @@ The events emitted by this gateway into Brigade are:
 - `create`: A branch or tag was created.
 - `deployment`: A deployment was created.
 - `deployment_status`: A deployment's sdtatus has changed.
+- `issue_comment`: An issue comment event with any `action`.  A second event qualified by `action` will _also_ be emitted.
+- `issue_comment:created`: An issue comment was created.
+- `issue_comment:edited`: An issue comment was edited.
+- `issue_comment:deleted`: An issue comment was deleted.
 - `pull_request`: A pull request event with any `action`. A second event qualified by `action` will _also_ be emitted.
 - `pull_request:assigned`: A pull request was assigned.
 - `pull_request:closed`: A pull request was closed.
@@ -246,6 +254,11 @@ The events emitted by this gateway into Brigade are:
 - `status`: The status of a git commit was changed.
 
 Each of these events is described in greater detail in [Github's own API documentation](https://developer.github.com/v3/activity/events/types/).
+
+A special note on an `issue_comment` event:  Since GitHub considers Pull Requests as Issues with code,
+this event will also be produced for general comments on Pull Requests -- meaning, outside of a dedicated Pull Request review
+or a comment on a commit directly.  (The latter events would be `pull_request_review_comment` and `commit_comment`,
+respectively.)
 
 The `check_suite` events will let you start all of your tests at once, while the
 `check_run` events will let you work with individual tests. The example in the
@@ -316,11 +329,19 @@ function checkRequested(e, p) {
 
 ```
 
+## Further Examples
+
+See `docs/examples` for further `brigade.js` examples exercising
+different event handling scenarios, including Issue/PR comment handling,
+(re-)running individual Checks and more.
+
 ### Parameters available on the `check-run` container
 
 The following parameters can be specified via environment variables:
 
-- `CHECK_PAYLOAD` (REQUIRED): The contents of `e.payload`.
+- `CHECK_PAYLOAD` (REQUIRED): The contents of `e.payload`.  Will be used to parse
+  repo name, commit and branch (if not provided by corresponding env vars below),
+  as well as auth token details
 - `CHECK_NAME` (default: Brigade): The name of the check. You should set this unless
   you are only running a single check.
 - `CHECK_TITLE` (default: "running check"): The title that will be displayed on GitHub
