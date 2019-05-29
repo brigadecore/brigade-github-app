@@ -6,7 +6,9 @@ SHELL ?= /bin/bash
 # Version details                                                              #
 ################################################################################
 
-GIT_VERSION = $(shell git describe --always --abbrev=7 --dirty)
+# This will reliably return the short SHA1 of HEAD or, if the working directory
+# is dirty, will return that + "-dirty"
+GIT_VERSION = $(shell git describe --always --abbrev=7 --dirty --match=NeVeRmAtCh)
 
 ################################################################################
 # Go build details                                                             #
