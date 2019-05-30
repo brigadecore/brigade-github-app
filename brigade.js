@@ -9,6 +9,47 @@ const localPath = gopath + `/src/github.com/${projectOrg}/${projectName}`;
 
 const releaseTagRegex = /^refs\/tags\/(v[0-9]+(?:\.[0-9]+)*(?:\-.+)?)$/;
 
+// **********************************************
+// Event Handlers
+// **********************************************
+
+events.on("exec", (e, p) => {
+  return test(e, p).run();
+})
+
+events.on("push", (e, p) => {
+  let matchStr = e.revision.ref.match(releaseTagRegex);
+  if (matchStr) {
+    // This is an official release with a semantically versioned tag
+    let matchTokens = Array.from(matchStr);
+    let version = matchTokens[1];
+    buildAndPublishImages(p, version).run()
+    .catch((err) => {
+      console.error(err.toString());
+    });
+  }
+  if (e.revision.ref == "refs/heads/master") {
+    // This runs tests then builds and publishes "edge" images
+    test().run()
+    .then(() => {
+      buildAndPublishImages(p, "").run();
+    })
+    .catch((err) => {
+      console.error(err.toString());
+    });
+  }
+})
+
+events.on("check_suite:requested", runSuite);
+events.on("check_suite:rerequested", runSuite);
+events.on("check_run:rerequested", checkRequested);
+events.on("issue_comment:created", handleIssueComment);
+events.on("issue_comment:edited", handleIssueComment);
+
+// **********************************************
+// Actions
+// **********************************************
+
 function test() {
   // Create a new job to run Go tests
   var job = new Job("tests", goImg);
@@ -42,6 +83,43 @@ function buildAndPublishImages(project, version) {
   return job;
 }
 
+// handleIssueComment handles an issue_comment event, parsing the comment text
+// and determining whether or not to trigger an action
+function handleIssueComment(e, p) {
+  payload = JSON.parse(e.payload);
+
+  // Extract the comment body and trim whitespace
+  comment = payload.body.comment.body.trim();
+
+  // Here we determine if a comment should provoke an action
+  switch(comment) {
+    case "/brig run":
+      return runSuite(e, p);
+    default:
+      console.log(`No applicable action found for comment: ${comment}`);
+  }
+}
+
+// checkRequested is the default function invoked on a check_run:* event
+//
+// It determines which check is being requested (from the payload body)
+// and runs this particular check, or else throws an error if the check
+// is not found
+function checkRequested(e, p) {
+  payload = JSON.parse(e.payload);
+
+  // Extract the check name
+  name = payload.body.check_run.name;
+
+  // Determine which check to run
+  switch(name) {
+    case "tests":
+      return runTests(e, p);
+    default:
+      throw new Error(`No check found with name: ${name}`);
+  }
+}
+
 // Here we can add additional Check Runs, which will run in parallel and
 // report their results independently to GitHub
 function runSuite(e, p) {
@@ -69,6 +147,10 @@ function runTests(e, p) {
   return notificationWrap(test(), note);
 }
 
+// **********************************************
+// Classes/Helpers
+// **********************************************
+
 // A GitHub Check Suite notification
 class Notification {
   constructor(name, e, p) {
@@ -92,7 +174,11 @@ class Notification {
   // Send a new notification, and return a Promise<result>.
   run() {
     this.count++;
-    var job = new Job(`${ this.name }-notification-${ this.count }`, "brigadecore/brigade-github-check-run:latest");
+    // Here we are using the mutable 'edge' version of this utility
+    // as an exercise of vetting the current master version of the code in this repo.
+    // It is recommended that immutable tags be used in other cases,
+    // e.g., a proper semver tag of 'vX.X.X' or the short git sha of a particular commit.
+    var job = new Job(`${ this.name }-notification-${ this.count }`, "brigadecore/brigade-github-check-run:edge");
     job.imageForcePull = true;
     job.env = {
       "CHECK_CONCLUSION": this.conclusion,
@@ -132,34 +218,3 @@ async function notificationWrap(job, note) {
     throw e;
   }
 }
-
-events.on("exec", (e, p) => {
-  return test(e, p).run();
-})
-
-events.on("push", (e, p) => {
-  let matchStr = e.revision.ref.match(releaseTagRegex);
-  if (matchStr) {
-    // This is an official release with a semantically versioned tag
-    let matchTokens = Array.from(matchStr);
-    let version = matchTokens[1];
-    buildAndPublishImages(p, version).run()
-    .catch((err) => {
-      console.error(err.toString());
-    });
-  }
-  if (e.revision.ref == "refs/heads/master") {
-    // This runs tests then builds and publishes "edge" images
-    test().run()
-    .then(() => {
-      buildAndPublishImages(p, "").run();
-    })
-    .catch((err) => {
-      console.error(err.toString());
-    });
-  }
-})
-
-events.on("check_suite:requested", runSuite);
-events.on("check_suite:rerequested", runSuite);
-events.on("check_run:rerequested", runSuite);
