@@ -23,19 +23,13 @@ events.on("push", (e, p) => {
     // This is an official release with a semantically versioned tag
     let matchTokens = Array.from(matchStr);
     let version = matchTokens[1];
-    buildAndPublishImages(p, version).run()
-    .catch((err) => {
-      console.error(err.toString());
-    });
+    return buildAndPublishImages(p, version).run();
   }
   if (e.revision.ref == "refs/heads/master") {
     // This runs tests then builds and publishes "edge" images
-    test().run()
+    return test().run()
     .then(() => {
       buildAndPublishImages(p, "").run();
-    })
-    .catch((err) => {
-      console.error(err.toString());
     });
   }
 })
