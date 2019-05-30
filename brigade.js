@@ -50,7 +50,7 @@ function runSuite(e, p) {
   // for the master branch.
   if (e.revision.ref != "master") {
     // For now, this is the one-stop shop running build, lint and test targets
-    runTests(e, p).catch(err => {console.error(err.toString())});
+    return runTests(e, p);
   }
 }
 
@@ -124,12 +124,12 @@ async function notificationWrap(job, note) {
     note.summary = `Task "${ job.name }" failed for ${ e.buildID }`;
     note.text = "```" + logs + "```\nFailed with error: " + e.toString();
     try {
-      return await note.run();
+      await note.run();
     } catch (e2) {
       console.error("failed to send notification: " + e2.toString());
       console.error("original error: " + e.toString());
-      return e2;
     }
+    throw e;
   }
 }
 
