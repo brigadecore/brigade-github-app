@@ -14,7 +14,7 @@ const releaseTagRegex = /^refs\/tags\/(v[0-9]+(?:\.[0-9]+)*(?:\-.+)?)$/;
 // **********************************************
 
 events.on("exec", (e, p) => {
-  return test(e, p).run();
+  return test().run();
 })
 
 events.on("push", (e, p) => {
