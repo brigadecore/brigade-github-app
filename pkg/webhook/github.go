@@ -216,7 +216,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 				return
 			}
 		}
-  }
+	}
 	var sharedSecret = proj.SharedSecret
 	if sharedSecret == "" {
 		sharedSecret = s.opts.DefaultSharedSecret
