@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/brigade-github-app/pkg/check"
-	"github.com/Azure/brigade-github-app/pkg/webhook"
+	"github.com/brigadecore/brigade-github-app/pkg/check"
+	"github.com/brigadecore/brigade-github-app/pkg/webhook"
 
 	"github.com/google/go-github/github"
 )
@@ -25,18 +25,28 @@ func main() {
 	conclusion := envOr("CHECK_CONCLUSION", "")
 	detailsURL := envOr("CHECK_DETAILS_URL", "")
 	externalID := envOr("CHECK_EXTERNAL_ID", "")
+	startedAt := envOr("CHECK_STARTED_AT", time.Now().Format(check.RFC8601))
 
 	// Support for GH Enterprise.
 	ghBaseURL := envOr("GITHUB_BASE_URL", "")
 	ghUploadURL := envOr("GITHUB_UPLOAD_URL", ghBaseURL)
+
+	var actions []check.Action
+	actionsJSON := envOr("CHECK_ACTIONS", "")
+	if actionsJSON != "" {
+		if err := json.Unmarshal([]byte(actionsJSON), &actions); err != nil {
+			fmt.Printf("Error: could not parse actions: %s\n", err)
+			os.Exit(1)
+		}
+	}
 
 	data := &webhook.Payload{}
 	if err := json.Unmarshal([]byte(payload), data); err != nil {
 		fmt.Printf("Error: could not parse payload: %s\n", err)
 		os.Exit(1)
 	}
-
 	token := data.Token
+
 	repo, commit, branch, err := repoCommitBranch(data)
 	if err != nil {
 		fmt.Printf("Error processing data: %s", err)
@@ -53,7 +63,7 @@ func main() {
 		Name:       name,
 		HeadBranch: branch,
 		HeadSHA:    commit,
-		StartedAt:  time.Now().Format(check.RFC8601),
+		StartedAt:  startedAt,
 		ExternalID: externalID,
 		DetailsURL: detailsURL,
 		Output: check.Output{
@@ -68,6 +78,10 @@ func main() {
 		run.Conclusion = conclusion
 		run.Status = "completed"
 		run.CompletedAt = time.Now().Format(check.RFC8601)
+	}
+
+	if actions != nil {
+		run.Actions = actions
 	}
 
 	// Once we have the token, we can switch from the app token to the
@@ -93,7 +107,7 @@ func main() {
 
 func repoCommitBranch(payload *webhook.Payload) (string, string, string, error) {
 	var repo, commit, branch string
-	// As ridiculous as this is, we have to remarshal the Body and unmartial it
+	// As ridiculous as this is, we have to remarshal the Body and unmarshal it
 	// into the right object.
 	tmp, err := json.Marshal(payload.Body)
 	if err != nil {
@@ -105,17 +119,31 @@ func repoCommitBranch(payload *webhook.Payload) (string, string, string, error) 
 		if err = json.Unmarshal(tmp, event); err != nil {
 			return repo, commit, branch, err
 		}
-		repo = *event.Repo.FullName
-		commit = *event.CheckRun.CheckSuite.HeadSHA
-		branch = *event.CheckRun.CheckSuite.HeadBranch
+		repo = event.Repo.GetFullName()
+		commit = event.CheckRun.CheckSuite.GetHeadSHA()
+		branch = event.CheckRun.CheckSuite.GetHeadBranch()
 	case "check_suite":
 		event := &github.CheckSuiteEvent{}
 		if err = json.Unmarshal(tmp, event); err != nil {
 			return repo, commit, branch, err
 		}
-		repo = *event.Repo.FullName
-		commit = *event.CheckSuite.HeadSHA
-		branch = *event.CheckSuite.HeadBranch
+		repo = event.Repo.GetFullName()
+		commit = event.CheckSuite.GetHeadSHA()
+		branch = event.CheckSuite.GetHeadBranch()
+	case "issue_comment":
+		event := &github.IssueCommentEvent{}
+		if err = json.Unmarshal(tmp, event); err != nil {
+			return repo, commit, branch, err
+		}
+		repo = event.Repo.GetFullName()
+		// A github.IssueCommentEvent event does not have commit or branch fields,
+		// therefore, we will expect them to be set on the payload itself
+		if commit = payload.Commit; commit == "" {
+			return repo, commit, branch, fmt.Errorf("commit empty")
+		}
+		if branch = payload.Branch; branch == "" {
+			return repo, commit, branch, fmt.Errorf("branch empty")
+		}
 	default:
 		return repo, commit, branch, fmt.Errorf("unknown payload type %s", payload.Type)
 	}

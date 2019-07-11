@@ -7,14 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// in_progress is an example body supplied by GitHub
+// inProgress is an example body supplied by GitHub
 // https://developer.github.com/v3/checks/runs/#create-a-check-run
-const in_progress = `
+const inProgress = `
 {
     "head_branch": "master",
     "name": "mighty_readme",
     "head_sha": "ce587453ced02b1526dfb4cb910479d431683101",
-    "status": "in_progress",
+    "status": "inProgress",
     "external_id": "42",
     "started_at": "2018-05-04T01:14:52Z",
     "output": {
@@ -28,14 +28,14 @@ const in_progress = `
 func TestHelloWorld(t *testing.T) {
 	is := assert.New(t)
 	cr := &Run{}
-	if err := json.Unmarshal([]byte(in_progress), cr); err != nil {
+	if err := json.Unmarshal([]byte(inProgress), cr); err != nil {
 		t.Fatal(err)
 	}
 
 	is.Equal(cr.HeadBranch, "master")
 	is.Equal(cr.Name, "mighty_readme")
 	is.Equal(cr.HeadSHA, "ce587453ced02b1526dfb4cb910479d431683101")
-	is.Equal(cr.Status, "in_progress")
+	is.Equal(cr.Status, "inProgress")
 	is.Equal(cr.ExternalID, "42")
 	is.Equal(cr.StartedAt, "2018-05-04T01:14:52Z")
 

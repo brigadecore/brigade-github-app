@@ -1,0 +1,17 @@
+{
+  "ref": "refs/heads/master",
+  "head_commit": {
+    "id": "589e15029e1e44dee48de4800daf1f78e64287c0",
+    "ref": "refs/heads/master"
+  },
+  "repository":{
+    "name": "empty-testbed",
+    "full_name": "deis/empty-testbed",
+    "clone_url": "https://github.com/deis/empty-testbed.git",
+    "ssh_url": "https://github.com/deis/empty-testbed.git",
+    "owner": {
+      "name": "deis"
+    }
+  },
+  "sender":{}
+}

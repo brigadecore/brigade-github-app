@@ -7,14 +7,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	gin "gopkg.in/gin-gonic/gin.v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
-	"github.com/Azure/brigade/pkg/storage/kube"
+	"github.com/brigadecore/brigade/pkg/storage/kube"
 
-	"github.com/Azure/brigade-github-app/pkg/webhook"
+	"github.com/brigadecore/brigade-github-app/pkg/webhook"
 )
 
 var (
@@ -65,6 +66,39 @@ func main() {
 		log.Printf("Forked PRs will be built for roles %s", strings.Join(allowedAuthors, " | "))
 	}
 
+	envOrBool := func(env string, defaultVal bool) bool {
+		s, ok := os.LookupEnv(env)
+		if !ok {
+			return defaultVal
+		}
+
+		realVal, err := strconv.ParseBool(s)
+		if err != nil {
+			return defaultVal
+		}
+
+		return realVal
+	}
+
+	envOrInt := func(env string, defaultVal int) int {
+		aa, ok := os.LookupEnv(env)
+		if !ok {
+			return defaultVal
+		}
+
+		realVal, err := strconv.Atoi(aa)
+		if err != nil {
+			return defaultVal
+		}
+		return realVal
+	}
+
+	ghOpts := webhook.GithubOpts{
+		CheckSuiteOnPR:      envOrBool("CHECK_SUITE_ON_PR", true),
+		AppID:               envOrInt("APP_ID", 0),
+		DefaultSharedSecret: os.Getenv("DEFAULT_SHARED_SECRET"),
+	}
+
 	clientset, err := kube.GetClient(master, kubeconfig)
 	if err != nil {
 		log.Fatal(err)
@@ -78,7 +112,8 @@ func main() {
 	events := router.Group("/events")
 	{
 		events.Use(gin.Logger())
-		events.POST("/github", webhook.NewGithubHook(store, allowedAuthors, key))
+		events.POST("/github", webhook.NewGithubHookHandler(store, allowedAuthors, key, ghOpts))
+		events.POST("/github/:app/:inst", webhook.NewGithubHookHandler(store, allowedAuthors, key, ghOpts))
 	}
 
 	router.GET("/healthz", healthz)

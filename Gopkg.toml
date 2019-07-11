@@ -1,15 +1,10 @@
 [[constraint]]
+  name = "github.com/brigadecore/brigade"
+  revision = "1eec8b07ca785154cf4df0b697378e205d7a4397"
+
+[[constraint]]
   name = "github.com/google/go-github"
-  version = "v16.0.0"
-
-[[constraint]]
-  name = "github.com/gosuri/uitable"
-
-[[constraint]]
-  name = "github.com/oklog/ulid"
-
-[[constraint]]
-  name = "github.com/spf13/cobra"
+  version = "v18.2.0"
 
 [[constraint]]
   name = "golang.org/x/oauth2"
@@ -18,23 +13,8 @@
   name = "gopkg.in/gin-gonic/gin.v1"
 
 [[constraint]]
-  name = "gopkg.in/yaml.v2"
-
-[[constraint]]
   name = "k8s.io/api"
   branch = "release-1.10"
-
-[[constraint]]
-  name = "k8s.io/apimachinery"
-  branch = "release-1.10"
-
-[[constraint]]
-  name = "k8s.io/client-go"
-  branch = "release-7.0"
-  
-[[constraint]]
-  branch = "master"
-  name = "github.com/Masterminds/kitt"
 
 [[constraint]]
   name = "github.com/stretchr/testify"

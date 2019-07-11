@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -10,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/google/go-github/github"
-	"gopkg.in/gin-gonic/gin.v1"
+	gin "gopkg.in/gin-gonic/gin.v1"
 
-	"github.com/Azure/brigade/pkg/brigade"
-	"github.com/Azure/brigade/pkg/storage"
+	"github.com/brigadecore/brigade/pkg/brigade"
+	"github.com/brigadecore/brigade/pkg/storage"
 )
 
 type testStore struct {
@@ -44,12 +43,19 @@ func newTestStore() *testStore {
 func newTestGithubHandler(store storage.Store, t *testing.T) *githubHook {
 	return &githubHook{
 		store:          store,
-		allowedAuthors: []string{"OWNERS"},
+		allowedAuthors: []string{"OWNER"},
 		getFile: func(commit, path string, proj *brigade.Project) ([]byte, error) {
 			return []byte(""), nil
 		},
 		createStatus: func(commit string, proj *brigade.Project, status *github.RepoStatus) error {
 			return nil
+		},
+		handleIssueCommentEvent: func(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
+			revision := brigade.Revision{
+				Commit: "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+				Ref:    "refs/pull/2/head",
+			}
+			return revision, []byte{}
 		},
 	}
 }
@@ -57,24 +63,66 @@ func newTestGithubHandler(store storage.Store, t *testing.T) *githubHook {
 func TestGithubHandler(t *testing.T) {
 
 	tests := []struct {
-		event        string
-		commit       string
-		ref          string
-		payloadFile  string
-		renamedEvent string
-		mustFail     bool
+		event          string
+		commit         string
+		ref            string
+		payloadFile    string
+		mustFail       bool
+		expectedBuilds []string
 	}{
 		{
-			event:       "push",
-			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			ref:         "refs/heads/changes",
-			payloadFile: "testdata/github-push-payload.json",
+			event:          "commit_comment",
+			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
+			payloadFile:    "testdata/github-commit_comment-payload.json",
+			expectedBuilds: []string{"commit_comment", "commit_comment:created"},
 		},
 		{
-			event:       "push",
-			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			payloadFile: "testdata/github-push-delete-branch.json",
-			mustFail:    true,
+			event:          "create",
+			ref:            "0.0.1",
+			payloadFile:    "testdata/github-create-payload.json",
+			expectedBuilds: []string{"create"},
+		},
+		{
+			event:          "deployment",
+			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
+			ref:            "master",
+			payloadFile:    "testdata/github-deployment-payload.json",
+			expectedBuilds: []string{"deployment"},
+		},
+		{
+			event:          "deployment_status",
+			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
+			ref:            "master",
+			payloadFile:    "testdata/github-deployment_status-payload.json",
+			expectedBuilds: []string{"deployment_status"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "",
+			ref:            "refs/heads/master",
+			payloadFile:    "testdata/github-issue_comment-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:created"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "",
+			ref:            "refs/heads/master",
+			payloadFile:    "testdata/github-issue_comment_pull_request_comment_deleted-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:deleted"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "",
+			ref:            "refs/heads/master",
+			payloadFile:    "testdata/github-issue_comment_pull_request_author_not_allowed-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:edited"},
+		},
+		{
+			event:          "issue_comment",
+			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			ref:            "refs/pull/2/head",
+			payloadFile:    "testdata/github-issue_comment_pull_request_author_allowed-payload.json",
+			expectedBuilds: []string{"issue_comment", "issue_comment:edited"},
 		},
 		{
 			event:       "pull_request",
@@ -84,55 +132,57 @@ func TestGithubHandler(t *testing.T) {
 			mustFail:    true,
 		},
 		{
-			event:       "pull_request",
-			ref:         "refs/pull/1/head",
+			event:          "pull_request",
+			ref:            "refs/pull/1/head",
+			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			payloadFile:    "testdata/github-pull_request-payload.json",
+			expectedBuilds: []string{"pull_request", "pull_request:opened"},
+		},
+		{
+			event:          "pull_request",
+			commit:         "ad0703ac08e80448764b34dc089d0f73a1242ae9",
+			ref:            "refs/pull/1/head",
+			payloadFile:    "testdata/github-pull_request-labeled-payload.json",
+			expectedBuilds: []string{"pull_request", "pull_request:labeled"},
+		},
+		{
+			event:          "pull_request_review",
+			commit:         "b7a1f9c27caa4e03c14a88feb56e2d4f7500aa63",
+			ref:            "refs/pull/8/head",
+			payloadFile:    "testdata/github-pull_request_review-payload.json",
+			expectedBuilds: []string{"pull_request_review", "pull_request_review:submitted"},
+		},
+		{
+			event:          "pull_request_review_comment",
+			commit:         "34c5c7793cb3b279e22454cb6750c80560547b3a",
+			ref:            "refs/pull/1/head",
+			payloadFile:    "testdata/github-pull_request_review_comment-payload.json",
+			expectedBuilds: []string{"pull_request_review_comment", "pull_request_review_comment:created"},
+		},
+		{
+			event:          "push",
+			commit:         "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
+			ref:            "refs/heads/changes",
+			payloadFile:    "testdata/github-push-payload.json",
+			expectedBuilds: []string{"push"},
+		},
+		{
+			event:       "push",
 			commit:      "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
-			payloadFile: "testdata/github-pull_request-payload.json",
+			payloadFile: "testdata/github-push-delete-branch.json",
+			mustFail:    true,
 		},
 		{
-			event:       "pull_request_review",
-			commit:      "b7a1f9c27caa4e03c14a88feb56e2d4f7500aa63",
-			ref:         "refs/pull/8/head",
-			payloadFile: "testdata/github-pull_request_review-payload.json",
+			event:          "status",
+			commit:         "9049f1265b7d61be4a8904a9a27120d2064dab3b",
+			payloadFile:    "testdata/github-status-payload.json",
+			expectedBuilds: []string{"status"},
 		},
 		{
-			event:        "pull_request",
-			commit:       "ad0703ac08e80448764b34dc089d0f73a1242ae9",
-			ref:          "refs/pull/1/head",
-			payloadFile:  "testdata/github-pull_request-labeled-payload.json",
-			renamedEvent: "pull_request:labeled",
-		},
-		{
-			event:       "status",
-			commit:      "9049f1265b7d61be4a8904a9a27120d2064dab3b",
-			payloadFile: "testdata/github-status-payload.json",
-		},
-		{
-			event:       "release",
-			ref:         "0.0.1",
-			payloadFile: "testdata/github-release-payload.json",
-		},
-		{
-			event:       "create",
-			ref:         "0.0.1",
-			payloadFile: "testdata/github-create-payload.json",
-		},
-		{
-			event:       "commit_comment",
-			commit:      "9049f1265b7d61be4a8904a9a27120d2064dab3b",
-			payloadFile: "testdata/github-commit_comment-payload.json",
-		},
-		{
-			event:       "deployment",
-			commit:      "9049f1265b7d61be4a8904a9a27120d2064dab3b",
-			ref:         "master",
-			payloadFile: "testdata/github-deployment-payload.json",
-		},
-		{
-			event:       "deployment_status",
-			commit:      "9049f1265b7d61be4a8904a9a27120d2064dab3b",
-			ref:         "master",
-			payloadFile: "testdata/github-deployment_status-payload.json",
+			event:          "release",
+			ref:            "0.0.1",
+			payloadFile:    "testdata/github-release-payload.json",
+			expectedBuilds: []string{"release", "release:published"},
 		},
 	}
 
@@ -166,6 +216,7 @@ func TestGithubHandler(t *testing.T) {
 				t.Fatalf("failed to create request: %s", err)
 			}
 			r.Header.Add("X-GitHub-Event", tt.event)
+			r.Header.Add("X-Hub-Signature", SHA1HMAC([]byte("asdf"), payload))
 
 			ctx, _ := gin.CreateTestContext(w)
 			ctx.Request = r
@@ -184,25 +235,36 @@ func TestGithubHandler(t *testing.T) {
 				return
 			}
 
-			if len(store.builds) != 1 {
-				t.Fatal("expected a build created")
+			if len(store.builds) != len(tt.expectedBuilds) {
+				t.Fatalf(
+					"expected %d build(s) but %d build(s) were created",
+					len(tt.expectedBuilds),
+					len(store.builds),
+				)
 			}
-			if ee := store.builds[0].Type; tt.renamedEvent != "" {
-				if ee != tt.renamedEvent {
-					t.Errorf("Build.Type is not correct. Expected renamed event %q, got %q", tt.renamedEvent, ee)
+			for i, build := range store.builds {
+				if build.Type != tt.expectedBuilds[i] {
+					t.Errorf(
+						"store.builds[%d].Type is not correct. Expected %q, got %q",
+						i,
+						tt.expectedBuilds[i],
+						build.Type,
+					)
 				}
-			} else if ee != tt.event {
-				t.Errorf("Build.Type is not correct. Expected event %q, got %q", tt.event, ee)
-			}
-			b := store.builds[0]
-			if b.Provider != "github" {
-				t.Error("Build.Provider is not correct")
-			}
-			if b.Revision.Commit != tt.commit {
-				t.Error("Build.Commit is not correct")
-			}
-			if b.Revision.Ref != tt.ref {
-				t.Errorf("Build.Commit is not correct. Expected ref %q, got %q", tt.ref, b.Revision.Ref)
+				if build.Provider != "github" {
+					t.Errorf("store.builds[%d].Provider is not correct", i)
+				}
+				if build.Revision.Commit != tt.commit {
+					t.Errorf("store.builds[%d].Commit is not correct", i)
+				}
+				if build.Revision.Ref != tt.ref {
+					t.Errorf(
+						"store.builds[%d].Commit is not correct. Expected ref %q, got %q",
+						i,
+						tt.ref,
+						build.Revision.Ref,
+					)
+				}
 			}
 		})
 	}
@@ -251,23 +313,4 @@ func TestGithubHandler_badevent(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "Ignored") {
 		t.Fatalf("unexpected body: %d\n%s", w.Code, w.Body.String())
 	}
-}
-
-func TestTruncAt(t *testing.T) {
-	if "foo" != truncAt("foo", 100) {
-		t.Fatal("modified string that was fine.")
-	}
-
-	if got := truncAt("foobar", 6); got != "foobar" {
-		t.Errorf("Unexpected truncation of foobar: %s", got)
-	}
-
-	if got := truncAt("foobar1", 6); got != "foo..." {
-		t.Errorf("Unexpected truncation of foobar1: %s", got)
-	}
-}
-
-// failingFileGet is a `fileGetter` which is useful for simulating a situation that the project repository to contain no file
-func failingFileGet(commit, path string, proj *brigade.Project) ([]byte, error) {
-	return []byte{}, fmt.Errorf("simulated \"missing file\" error for commit=%s, path=%s, proj.name=%s", commit, path, proj.Name)
 }

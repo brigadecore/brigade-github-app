@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 
-	"github.com/Azure/brigade/pkg/brigade"
+	"github.com/brigadecore/brigade/pkg/brigade"
 )
 
 // State names for GitHub status
@@ -146,6 +146,10 @@ func (s *githubHook) installationToken(appID, installationID int, cfg brigade.Gi
 	// We need to perform auth here, and then inject the token into the
 	// body so that the app can use it.
 	tok, err := JWT(aidStr, s.key)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
 	ghc, err := ghClient(brigade.Github{
 		Token:     tok,
 		BaseURL:   cfg.BaseURL,
