@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/github"
 	gin "gopkg.in/gin-gonic/gin.v1"
@@ -29,7 +30,7 @@ type githubHook struct {
 	store                   storage.Store
 	getFile                 fileGetter
 	createStatus            statusCreator
-	handleIssueCommentEvent iceUpdater
+	updateIssueCommentEvent iceUpdater
 	opts                    GithubOpts
 	allowedAuthors          []string
 	// key is the x509 certificate key as ASCII-armored (PEM) data
@@ -57,7 +58,7 @@ func NewGithubHookHandler(s storage.Store, authors []string, x509Key []byte, opt
 		store:                   s,
 		getFile:                 getFileFromGithub,
 		createStatus:            setRepoStatus,
-		handleIssueCommentEvent: handleIssueCommentEvent,
+		updateIssueCommentEvent: updateIssueCommentEvent,
 		allowedAuthors:          authors,
 		key:                     x509Key,
 		opts:                    opts,
@@ -98,325 +99,10 @@ func (s *githubHook) Handle(c *gin.Context) {
 	}
 }
 
-func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
-	body, err := ioutil.ReadAll(c.Request.Body)
-	if err != nil {
-		log.Printf("Failed to read body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-	defer c.Request.Body.Close()
-
-	log.Print(string(body))
-
-	var action string
-	var repo string
-	var rev brigade.Revision
-	var res *Payload
-	switch eventType {
-	case "check_suite":
-		e := &github.CheckSuiteEvent{}
-		err := json.Unmarshal(body, e)
-		if err != nil {
-			log.Printf("Failed to parse body: %s", err)
-			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-			return
-		}
-
-		res = &Payload{
-			Body:   e,
-			AppID:  int(e.CheckSuite.App.GetID()),
-			InstID: int(e.Installation.GetID()),
-			Type:   "check_suite",
-		}
-
-		if res.AppID != s.opts.AppID {
-			log.Printf("This was destined for app %d, not us (%d)", res.AppID, s.opts.AppID)
-			return
-		}
-
-		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
-		action = e.GetAction()
-		repo = e.Repo.GetFullName()
-		rev.Commit = e.CheckSuite.GetHeadSHA()
-		rev.Ref = e.CheckSuite.GetHeadBranch()
-
-	case "check_run":
-		e := &github.CheckRunEvent{}
-		err := json.Unmarshal(body, e)
-		if err != nil {
-			log.Printf("Failed to parse body: %s", err)
-			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-			return
-		}
-
-		res = &Payload{
-			Body:   e,
-			AppID:  int(e.CheckRun.App.GetID()),
-			InstID: int(e.Installation.GetID()),
-			Type:   "check_run",
-		}
-
-		if res.AppID == 0 {
-			res.AppID = int(e.CheckRun.CheckSuite.App.GetID())
-		}
-
-		if res.AppID != s.opts.AppID {
-			log.Printf("This was destined for app %d, not us (%d)", res.AppID, s.opts.AppID)
-			return
-		}
-
-		action = e.GetAction()
-		repo = e.Repo.GetFullName()
-		rev.Commit = e.CheckRun.CheckSuite.GetHeadSHA()
-		rev.Ref = e.CheckRun.CheckSuite.GetHeadBranch()
-	}
-
-	proj, err := s.store.GetProject(repo)
-	if err != nil {
-		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
-		return
-	}
-
-	var sharedSecret = proj.SharedSecret
-	if sharedSecret == "" {
-		sharedSecret = s.opts.DefaultSharedSecret
-	}
-	if sharedSecret == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
-		return
-	}
-
-	signature := c.Request.Header.Get(hubSignatureHeader)
-	if err := validateSignature(signature, sharedSecret, body); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
-		return
-	}
-
-	tok, timeout, err := s.installationToken(res.AppID, res.InstID, proj.Github)
-	if err != nil {
-		log.Printf("Failed to negotiate a token: %s", err)
-		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
-		return
-	}
-	res.Token = tok
-	res.TokenExpires = timeout
-
-	// Remarshal the body back into JSON
-	pl := map[string]interface{}{}
-	err = json.Unmarshal(body, &pl)
-	res.Body = pl
-	if err != nil {
-		log.Printf("Failed to re-parse body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Our parser is probably broken"})
-		return
-	}
-
-	payload, err := json.Marshal(res)
-	if err != nil {
-		log.Print(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
-		return
-	}
-
-	// Schedule a build using the raw eventType
-	s.build(eventType, rev, payload, proj)
-	// For events that have an action, schedule a second build for eventType:action
-	if action != "" {
-		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, payload, proj)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
-}
-
-// handleIssueComment handles an "issue_comment" event type
-func (s *githubHook) handleIssueComment(c *gin.Context, eventType string) {
-	body, err := ioutil.ReadAll(c.Request.Body)
-	if err != nil {
-		log.Printf("Failed to read body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-	defer c.Request.Body.Close()
-
-	e, err := github.ParseWebHook(eventType, body)
-	if err != nil {
-		log.Printf("Failed to parse body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-
-	var action string
-	var repo string
-	var rev brigade.Revision
-	var payload []byte
-	var ice *github.IssueCommentEvent
-
-	switch e := e.(type) {
-	case *github.IssueCommentEvent:
-		ice = e
-		action = e.GetAction()
-		repo = e.Repo.GetFullName()
-	default:
-		log.Printf("Failed to parse payload")
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Received data is not supported or not valid JSON"})
-		return
-	}
-
-	proj, err := s.store.GetProject(repo)
-	if err != nil {
-		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
-		return
-	}
-
-	var sharedSecret = proj.SharedSecret
-	if sharedSecret == "" {
-		sharedSecret = s.opts.DefaultSharedSecret
-	}
-	if sharedSecret == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
-		return
-	}
-
-	signature := c.Request.Header.Get(hubSignatureHeader)
-	if err := validateSignature(signature, sharedSecret, body); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
-		return
-	}
-
-	if ice != nil && (action == "created" || action == "edited") {
-		// If there are Pull Request links, this issue matches a Pull Request,
-		// so we should fetch and set corresponding revision values
-		prLinks := ice.Issue.GetPullRequestLinks()
-		if prLinks != nil {
-			// If author association of issue comment is not in allowed list, we return,
-			// as we don't wish to populate event with actionable data (for requesting check runs, etc.)
-			if assoc := ice.Comment.GetAuthorAssociation(); !s.isAllowedAuthor(assoc) {
-				log.Printf("not fetching corresponding pull request as issue comment is from disallowed author %s", assoc)
-			} else {
-				rev, payload = s.handleIssueCommentEvent(c, s, ice, rev, proj, body)
-			}
-		}
-	}
-
-	// If rev ref still unset, set to master so builds can instantiate
-	if rev.Ref == "" {
-		rev.Ref = "refs/heads/master"
-	}
-
-	// Schedule a build using the raw eventType
-	s.build(eventType, rev, payload, proj)
-	// For events that have an action, schedule a second build for eventType:action
-	if action != "" {
-		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, payload, proj)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
-}
-
-// handleIssueCommentEvent runs further processing with a given github.IssueCommentEvent,
-// including extracting data from a corresponding Pull Request and adding GitHub App data
-// (App ID, Installation ID, Token, Timeout) to the returned payload body.
+// handleEvent handles the bulk of GitHub events
 //
-// This extra context empowers consumers of the resulting Brigade event with the ability
-// to (re-)trigger actions on the Pull Request itself, such as (re-)running Check Runs,
-// Check Suites or otherwise running jobs that consume/use the PR commit/branch data.
-func handleIssueCommentEvent(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
-	appID := s.opts.AppID
-	instID := ice.Installation.GetID()
-
-	if appID == 0 || instID == 0 {
-		log.Printf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
-		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
-		return rev, body
-	}
-
-	tok, timeout, err := s.installationToken(int(appID), int(instID), proj.Github)
-	if err != nil {
-		log.Printf("Failed to negotiate a token: %s", err)
-		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
-		return rev, body
-	}
-
-	pullRequest, err := getPRFromIssueComment(c, s, tok, ice, proj)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError,
-			gin.H{"status": "failed to fetch pull request for corresponding issue comment"})
-		return rev, body
-	}
-
-	// Populate the brigade.Revision, as per usual
-	rev.Commit = pullRequest.Head.GetSHA()
-	rev.Ref = fmt.Sprintf("refs/pull/%d/head", pullRequest.GetNumber())
-
-	// Here we build/populate Brigade's webhook.Payload object
-	//
-	// Note we also add commit and branch data here, as neither is
-	// included in the github.IssueCommentEvent (here res.Body)
-	// The check run utility that requests check runs requires these values
-	// and does not have access to he brigade.Revision object above.
-	res := &Payload{
-		Body:         ice,
-		AppID:        appID,
-		InstID:       int(instID),
-		Type:         "issue_comment",
-		Token:        tok,
-		TokenExpires: timeout,
-		Commit:       rev.Commit,
-		Branch:       rev.Ref,
-	}
-
-	// Remarshal the body back into JSON
-	pl := map[string]interface{}{}
-	err = json.Unmarshal(body, &pl)
-	res.Body = pl
-	if err != nil {
-		log.Printf("Failed to re-parse body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Our parser is probably broken"})
-		return rev, body
-	}
-
-	payload, err := json.Marshal(res)
-	if err != nil {
-		log.Print(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
-		return rev, body
-	}
-	return rev, payload
-}
-
-// getPRFromIssueComment fetches a pull request from a corresponding github.IssueCommentEvent
-func getPRFromIssueComment(c *gin.Context, s *githubHook, token string, ice *github.IssueCommentEvent, proj *brigade.Project) (*github.PullRequest, error) {
-	repo := ice.Repo.GetFullName()
-
-	client, err := InstallationTokenClient(token, proj.Github.BaseURL, proj.Github.UploadURL)
-	if err != nil {
-		log.Printf("Failed to create a new installation token client: %s", err)
-		return nil, ErrAuthFailed
-	}
-
-	projectNames := strings.Split(repo, "/")
-	if len(projectNames) != 2 {
-		log.Printf("Repo %q is invalid. Should be github.com/ORG/NAME.", repo)
-		return nil, errors.New("invalid repo name")
-	}
-	owner, pname := projectNames[0], projectNames[1]
-
-	pullRequest, resp, err := client.PullRequests.Get(c, owner, pname, ice.Issue.GetNumber())
-	if err != nil {
-		log.Printf("Failed to get pull request: %s", err)
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Failed to get pull request; http response status code: %d", resp.StatusCode)
-		return nil, err
-	}
-
-	return pullRequest, nil
-}
-
+// This is where handling should go for events that can just flow through
+// in the form of a Brigade event without further processing
 func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 	body, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
@@ -500,25 +186,9 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		return
 	}
 
-	proj, err := s.store.GetProject(repo)
+	proj, err := s.getValidatedProject(c, repo, body)
 	if err != nil {
-		log.Printf("Project %q not found. No secret loaded. %s", repo, err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
-		return
-	}
-
-	var sharedSecret = proj.SharedSecret
-	if sharedSecret == "" {
-		sharedSecret = s.opts.DefaultSharedSecret
-	}
-	if sharedSecret == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
-		return
-	}
-
-	signature := c.Request.Header.Get(hubSignatureHeader)
-	if err := validateSignature(signature, sharedSecret, body); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
+		log.Printf("Project validation failed: %s", err)
 		return
 	}
 
@@ -537,14 +207,343 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 		// TODO: do we return here (e.g. stop the PR hook) if we get to this point
 	}
 
-	// Schedule a build using the raw eventType
-	s.build(eventType, rev, body, proj)
-	// For events that have an action, schedule a second build for eventType:action
-	if action != "" {
-		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, body, proj)
-	}
+	s.scheduleBuild(eventType, action, rev, body, proj)
 
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
+}
+
+// handleCheck handles events from the GitHub Checks API
+//
+// These require a bit more processing, including retrieving corresponding
+// GitHub App particulars and authorization token
+func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
+	body, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("Failed to read body: %s", err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+		return
+	}
+	defer c.Request.Body.Close()
+
+	log.Print(string(body))
+
+	var action string
+	var repo string
+	var rev brigade.Revision
+	var res *Payload
+	switch eventType {
+	case "check_suite":
+		e := &github.CheckSuiteEvent{}
+		err := json.Unmarshal(body, e)
+		if err != nil {
+			log.Printf("Failed to parse body: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+			return
+		}
+
+		res = &Payload{
+			Body:   e,
+			AppID:  int(e.CheckSuite.App.GetID()),
+			InstID: int(e.Installation.GetID()),
+			Type:   "check_suite",
+		}
+
+		if res.AppID != s.opts.AppID {
+			log.Printf("This was destined for app %d, not us (%d)", res.AppID, s.opts.AppID)
+			return
+		}
+
+		// This can be check_suite:requested, check_suite:rerequested, and check_suite:completed
+		action = e.GetAction()
+		repo = e.Repo.GetFullName()
+		rev.Commit = e.CheckSuite.GetHeadSHA()
+		rev.Ref = e.CheckSuite.GetHeadBranch()
+
+	case "check_run":
+		e := &github.CheckRunEvent{}
+		err := json.Unmarshal(body, e)
+		if err != nil {
+			log.Printf("Failed to parse body: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+			return
+		}
+
+		res = &Payload{
+			Body:   e,
+			AppID:  int(e.CheckRun.App.GetID()),
+			InstID: int(e.Installation.GetID()),
+			Type:   "check_run",
+		}
+
+		if res.AppID == 0 {
+			res.AppID = int(e.CheckRun.CheckSuite.App.GetID())
+		}
+
+		if res.AppID != s.opts.AppID {
+			log.Printf("This was destined for app %d, not us (%d)", res.AppID, s.opts.AppID)
+			return
+		}
+
+		action = e.GetAction()
+		repo = e.Repo.GetFullName()
+		rev.Commit = e.CheckRun.CheckSuite.GetHeadSHA()
+		rev.Ref = e.CheckRun.CheckSuite.GetHeadBranch()
+	}
+
+	proj, err := s.getValidatedProject(c, repo, body)
+	if err != nil {
+		log.Printf("Project validation failed: %s", err)
+		return
+	}
+
+	tok, timeout, err := s.getInstallationToken(res.AppID, res.InstID, proj)
+	if err != nil {
+		log.Printf("Failed to negotiate a token: %s", err)
+		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
+		return
+	}
+	res.Token = tok
+	res.TokenExpires = timeout
+
+	payload, err := marshalWithGithubPayload(res, body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
+	}
+
+	s.scheduleBuild(eventType, action, rev, payload, proj)
+
+	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
+}
+
+// handleIssueComment handles an "issue_comment" event type
+//
+// It may simply forward along the GitHub payload body, or it may run further processing,
+// including extracting data from a corresponding Pull Request and adding GitHub App data
+// (App ID, Installation ID, Token, Timeout) to the returned payload body.
+//
+// This extra context empowers consumers of the resulting Brigade event with the ability
+// to (re-)trigger actions on the Pull Request itself, such as (re-)running Check Runs,
+// Check Suites or otherwise running jobs that consume/use the PR commit/branch data.
+func (s *githubHook) handleIssueComment(c *gin.Context, eventType string) {
+	body, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("Failed to read body: %s", err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+		return
+	}
+	defer c.Request.Body.Close()
+
+	e, err := github.ParseWebHook(eventType, body)
+	if err != nil {
+		log.Printf("Failed to parse body: %s", err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+		return
+	}
+
+	var action string
+	var repo string
+	var rev brigade.Revision
+	var payload []byte
+	var ice *github.IssueCommentEvent
+
+	switch e := e.(type) {
+	case *github.IssueCommentEvent:
+		ice = e
+		action = e.GetAction()
+		repo = e.Repo.GetFullName()
+	default:
+		log.Printf("Failed to parse payload")
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Received data is not supported or not valid JSON"})
+		return
+	}
+
+	proj, err := s.getValidatedProject(c, repo, body)
+	if err != nil {
+		log.Printf("Project validation failed: %s", err)
+		return
+	}
+
+	// If the IssueCommentEvent isn't nil and the corresponding action is one of
+	// 'created' or 'edited', check to see if it belongs to a Pull Request and if so,
+	// perform further processing
+	if ice != nil && (action == "created" || action == "edited") {
+		// If there are Pull Request links, this issue matches a Pull Request,
+		// so we should fetch and set corresponding revision values
+		prLinks := ice.Issue.GetPullRequestLinks()
+		if prLinks != nil {
+			// If author association of issue comment is not in allowed list, we return,
+			// as we don't wish to populate event with actionable data (for requesting check runs, etc.)
+			if assoc := ice.Comment.GetAuthorAssociation(); !s.isAllowedAuthor(assoc) {
+				log.Printf("not fetching corresponding pull request as issue comment is from disallowed author %s", assoc)
+			} else {
+				rev, payload = s.updateIssueCommentEvent(c, s, ice, rev, proj, body)
+			}
+		}
+	}
+
+	// If rev ref still unset, as may be the case for an issue comment
+	// unrelated to any Pull Request, we set to master so builds can instantiate
+	if rev.Ref == "" {
+		rev.Ref = "refs/heads/master"
+	}
+
+	s.scheduleBuild(eventType, action, rev, payload, proj)
+
+	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
+}
+
+// updateIssueCommentEvent updates a raw github.IssueCommentEvent with further context
+//
+// For such events associated with Pull Requests, here we update with pertinent GitHub
+// App details (including authz token) such that consumers of the resulting Brigade
+// event have the power to request check suites or check runs on the said Pull Request.
+func updateIssueCommentEvent(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
+	appID := s.opts.AppID
+	instID := ice.Installation.GetID()
+
+	tok, timeout, err := s.getInstallationToken(appID, int(instID), proj)
+	if err != nil {
+		log.Printf("Failed to negotiate a token: %s", err)
+		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
+		return rev, body
+	}
+
+	pullRequest, err := getPRFromIssueComment(c, s, tok, ice, proj)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			gin.H{"status": "failed to fetch pull request for corresponding issue comment"})
+		return rev, body
+	}
+
+	// Populate the brigade.Revision, as per usual
+	rev.Commit = pullRequest.Head.GetSHA()
+	rev.Ref = fmt.Sprintf("refs/pull/%d/head", pullRequest.GetNumber())
+
+	// Here we build/populate Brigade's webhook.Payload object
+	//
+	// Note we also add commit and branch data here, as neither is
+	// included in the github.IssueCommentEvent (here res.Body)
+	// The check run utility that requests check runs requires these values
+	// and does not have access to he brigade.Revision object above.
+	res := &Payload{
+		Body:         ice,
+		AppID:        appID,
+		InstID:       int(instID),
+		Type:         "issue_comment",
+		Token:        tok,
+		TokenExpires: timeout,
+		Commit:       rev.Commit,
+		Branch:       rev.Ref,
+	}
+
+	payload, err := marshalWithGithubPayload(res, body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
+	}
+
+	return rev, payload
+}
+
+// getValidatedProject retrieves a brigade Project using the provided repo name
+// and validates that the signature of the incoming webhook matches proj.SharedSecret
+func (s *githubHook) getValidatedProject(c *gin.Context, repo string, body []byte) (*brigade.Project, error) {
+	proj, err := s.store.GetProject(repo)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "project not found"})
+		return nil, fmt.Errorf("project %q not found. no secret loaded. %s", repo, err)
+	}
+
+	var sharedSecret = proj.SharedSecret
+	if sharedSecret == "" {
+		sharedSecret = s.opts.DefaultSharedSecret
+	}
+	if sharedSecret == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "No secret is configured for this repo."})
+		return nil, fmt.Errorf("no secret is configured for this repo")
+	}
+
+	signature := c.Request.Header.Get(hubSignatureHeader)
+	if err := validateSignature(signature, sharedSecret, body); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"status": "malformed signature"})
+		return nil, fmt.Errorf("signature validation failed")
+	}
+	return proj, nil
+}
+
+// marshalWithGithubPayload marshals a provided Payload after setting
+// Payload.Body to the provided GitHub payload body
+func marshalWithGithubPayload(res *Payload, body []byte) ([]byte, error) {
+	// Remarshal the body back into JSON
+	pl := map[string]interface{}{}
+	err := json.Unmarshal(body, &pl)
+	if err != nil {
+		log.Printf("Failed to re-parse body: %s", err)
+		return []byte{}, err
+	}
+	res.Body = pl
+
+	payload, err := json.Marshal(res)
+	if err != nil {
+		log.Print(err)
+		return []byte{}, err
+	}
+
+	return payload, nil
+}
+
+// scheduleBuild schedules a Brigade build both for the raw eventType
+// and for each action of the event, when applicable
+func (s *githubHook) scheduleBuild(eventType, action string, rev brigade.Revision, payload []byte, proj *brigade.Project) {
+	// Schedule a build using the raw eventType
+	s.build(eventType, rev, payload, proj)
+	// For events that have an action, schedule a second build for eventType:action
+	if action != "" {
+		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, payload, proj)
+	}
+}
+
+// getInstallationToken acquires a token and timeout using a provided app ID,
+// installation ID and brigade project
+func (s *githubHook) getInstallationToken(appID int, instID int, proj *brigade.Project) (string, time.Time, error) {
+	if appID == 0 || instID == 0 {
+		return "", time.Time{}, fmt.Errorf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
+	}
+
+	tok, timeout, err := s.installationToken(int(appID), int(instID), proj.Github)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("Failed to negotiate a token: %s", err)
+	}
+	return tok, timeout, nil
+}
+
+// getPRFromIssueComment fetches a pull request from a corresponding github.IssueCommentEvent
+func getPRFromIssueComment(c *gin.Context, s *githubHook, token string, ice *github.IssueCommentEvent, proj *brigade.Project) (*github.PullRequest, error) {
+	repo := ice.Repo.GetFullName()
+
+	client, err := InstallationTokenClient(token, proj.Github.BaseURL, proj.Github.UploadURL)
+	if err != nil {
+		log.Printf("Failed to create a new installation token client: %s", err)
+		return nil, ErrAuthFailed
+	}
+
+	projectNames := strings.Split(repo, "/")
+	if len(projectNames) != 2 {
+		log.Printf("Repo %q is invalid. Should be github.com/ORG/NAME.", repo)
+		return nil, errors.New("invalid repo name")
+	}
+	owner, pname := projectNames[0], projectNames[1]
+
+	pullRequest, resp, err := client.PullRequests.Get(c, owner, pname, ice.Issue.GetNumber())
+	if err != nil {
+		log.Printf("Failed to get pull request: %s", err)
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Failed to get pull request; http response status code: %d", resp.StatusCode)
+		return nil, err
+	}
+
+	return pullRequest, nil
 }
 
 // prToCheckSuite creates a new check suite and rerequests it based on a pull request.
@@ -568,16 +567,12 @@ func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent
 	appID := s.opts.AppID
 	instID := pre.Installation.GetID()
 
-	if appID == 0 || instID == 0 {
-		log.Printf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
-		return ErrAuthFailed
-	}
-
-	tok, _, err := s.installationToken(int(appID), int(instID), proj.Github)
+	tok, _, err := s.getInstallationToken(appID, int(instID), proj)
 	if err != nil {
 		log.Printf("Failed to negotiate a token: %s", err)
 		return ErrAuthFailed
 	}
+
 	client, err := InstallationTokenClient(tok, proj.Github.BaseURL, proj.Github.UploadURL)
 	if err != nil {
 		log.Printf("Failed to create a new installation token client: %s", err)
@@ -649,6 +644,8 @@ func (s *githubHook) isAllowedPullRequest(e *github.PullRequestEvent) bool {
 	return false
 }
 
+// isAllowedAuthor checks to see if the provided author is in the list
+// of allowed authors configured on this gateway
 func (s *githubHook) isAllowedAuthor(author string) bool {
 	for _, a := range s.allowedAuthors {
 		if a == author {
@@ -680,6 +677,7 @@ func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, erro
 	return GetFileContents(proj, commit, path)
 }
 
+// build creates a new brigade.Build using the info provided
 func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) error {
 	if !s.shouldEmit(eventType) {
 		return nil
