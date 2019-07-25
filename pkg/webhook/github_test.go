@@ -57,6 +57,9 @@ func newTestGithubHandler(store storage.Store, t *testing.T) *githubHook {
 			}
 			return revision, []byte{}
 		},
+		opts: GithubOpts{
+			EmittedEvents: []string{"*"},
+		},
 	}
 }
 
@@ -312,5 +315,61 @@ func TestGithubHandler_badevent(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Ignored") {
 		t.Fatalf("unexpected body: %d\n%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGithubHandler_shouldEmit(t *testing.T) {
+	tests := []struct {
+		event    string
+		pattern  string
+		expected bool
+	}{
+		{
+			event:    "issue_comment",
+			pattern:  "*",
+			expected: true,
+		},
+		{
+			event:    "issue_comment:created",
+			pattern:  "*",
+			expected: true,
+		},
+		{
+			event:    "issue_comment",
+			pattern:  "issue_comment",
+			expected: true,
+		},
+		{
+			event:    "issue_comment",
+			pattern:  "issue_comment:created",
+			expected: false,
+		},
+		{
+			event:    "issue_comment:created",
+			pattern:  "issue_comment",
+			expected: true,
+		},
+		{
+			event:    "issue_comment:created",
+			pattern:  "issue_comment:created",
+			expected: true,
+		},
+	}
+
+	for i := range tests {
+		tt := tests[i]
+		t.Run(tt.event+"/"+tt.pattern, func(t *testing.T) {
+			s := &githubHook{
+				opts: GithubOpts{
+					EmittedEvents: []string{tt.pattern},
+				},
+			}
+
+			actual := s.shouldEmit(tt.event)
+
+			if actual != tt.expected {
+				t.Fatalf("unexpected result: pattern=%s, event=%s, expected=%v, actual=%v", tt.pattern, tt.event, tt.expected, actual)
+			}
+		})
 	}
 }

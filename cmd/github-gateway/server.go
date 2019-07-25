@@ -25,11 +25,15 @@ var (
 	gatewayPort    string
 	keyFile        string
 	allowedAuthors authors
+	emittedEvents  events
 )
 
 // defaultAllowedAuthors is the default set of authors allowed to PR
 // https://developer.github.com/v4/reference/enum/commentauthorassociation/
 var defaultAllowedAuthors = []string{"COLLABORATOR", "OWNER", "MEMBER"}
+
+// defaultEmittedEvents is the default set of events to be emitted by the gateway
+var defaultEmittedEvents = []string{"*"}
 
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
@@ -38,6 +42,7 @@ func init() {
 	flag.StringVar(&gatewayPort, "gateway-port", defaultGatewayPort(), "TCP port to use for brigade-github-gateway")
 	flag.StringVar(&keyFile, "key-file", "/etc/brigade-github-app/key.pem", "path to x509 key for GitHub app")
 	flag.Var(&allowedAuthors, "authors", "allowed author associations, separated by commas (COLLABORATOR, CONTRIBUTOR, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR, MEMBER, OWNER, NONE)")
+	flag.Var(&emittedEvents, "events", "events to be emitted and passed to worker, separated by commas (defaults to `*`, which matches everything)")
 }
 
 func main() {
@@ -64,6 +69,14 @@ func main() {
 
 	if len(allowedAuthors) > 0 {
 		log.Printf("Forked PRs will be built for roles %s", strings.Join(allowedAuthors, " | "))
+	}
+
+	if len(emittedEvents) == 0 {
+		if ee, ok := os.LookupEnv("BRIGADE_EVENTS"); ok {
+			(&emittedEvents).Set(ee)
+		} else {
+			emittedEvents = defaultEmittedEvents
+		}
 	}
 
 	envOrBool := func(env string, defaultVal bool) bool {
@@ -97,6 +110,7 @@ func main() {
 		CheckSuiteOnPR:      envOrBool("CHECK_SUITE_ON_PR", true),
 		AppID:               envOrInt("APP_ID", 0),
 		DefaultSharedSecret: os.Getenv("DEFAULT_SHARED_SECRET"),
+		EmittedEvents:       emittedEvents,
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)
@@ -150,5 +164,18 @@ func (a *authors) Set(value string) error {
 }
 
 func (a *authors) String() string {
+	return strings.Join(*a, ",")
+}
+
+type events []string
+
+func (a *events) Set(value string) error {
+	for _, aa := range strings.Split(value, ",") {
+		*a = append(*a, strings.ToUpper(aa))
+	}
+	return nil
+}
+
+func (a *events) String() string {
 	return strings.Join(*a, ",")
 }
