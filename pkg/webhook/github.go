@@ -42,6 +42,7 @@ type GithubOpts struct {
 	CheckSuiteOnPR      bool
 	AppID               int
 	DefaultSharedSecret string
+	EmittedEvents       []string
 }
 
 type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
@@ -657,11 +658,32 @@ func (s *githubHook) isAllowedAuthor(author string) bool {
 	return false
 }
 
+func (s *githubHook) shouldEmit(eventType string) bool {
+	eventAction := strings.Split(eventType, ":")
+
+	var event, action string
+	event = eventAction[0]
+	if len(eventAction) > 1 {
+		action = eventAction[1]
+	}
+
+	for _, e := range s.opts.EmittedEvents {
+
+		if e == "*" || e == event || e == event+":"+action {
+			return true
+		}
+	}
+	return false
+}
+
 func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, error) {
 	return GetFileContents(proj, commit, path)
 }
 
 func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) error {
+	if !s.shouldEmit(eventType) {
+		return nil
+	}
 	b := &brigade.Build{
 		ProjectID: proj.ID,
 		Type:      eventType,
