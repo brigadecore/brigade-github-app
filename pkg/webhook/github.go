@@ -358,10 +358,9 @@ func (s *githubHook) handleIssueComment(c *gin.Context, eventType string) {
 	// 'created' or 'edited', check to see if it belongs to a Pull Request and if so,
 	// perform further processing
 	if ice != nil && (action == "created" || action == "edited") {
-		// If there are Pull Request links, this issue matches a Pull Request,
-		// so we should fetch and set corresponding revision values
-		prLinks := ice.Issue.GetPullRequestLinks()
-		if prLinks != nil {
+		// If the issue is a pull request we should fetch and set corresponding
+		// revision values.
+		if ice.Issue.IsPullRequest() {
 			// If author association of issue comment is not in allowed list, we return,
 			// as we don't wish to populate event with actionable data (for requesting check runs, etc.)
 			if assoc := ice.Comment.GetAuthorAssociation(); !s.isAllowedAuthor(assoc) {
