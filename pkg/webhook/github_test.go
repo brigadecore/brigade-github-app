@@ -44,12 +44,6 @@ func newTestGithubHandler(store storage.Store, t *testing.T) *githubHook {
 	return &githubHook{
 		store:          store,
 		allowedAuthors: []string{"OWNER"},
-		getFile: func(commit, path string, proj *brigade.Project) ([]byte, error) {
-			return []byte(""), nil
-		},
-		createStatus: func(commit string, proj *brigade.Project, status *github.RepoStatus) error {
-			return nil
-		},
 		updateIssueCommentEvent: func(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte) {
 			revision := brigade.Revision{
 				Commit: "0d1a26e67d8f5eaf1f6ba5c57fc3c7d91ac0fd1c",
@@ -193,20 +187,6 @@ func TestGithubHandler(t *testing.T) {
 		t.Run(tt.payloadFile, func(t *testing.T) {
 			store := newTestStore()
 			s := newTestGithubHandler(store, t)
-
-			// TODO: do we want to test this?
-			s.createStatus = func(commit string, proj *brigade.Project, status *github.RepoStatus) error {
-				if status.GetState() != "pending" {
-					t.Error("RepoStatus.State is not correct")
-				}
-				if status.GetDescription() != "Building" {
-					t.Error("RepoStatus.Building is not correct")
-				}
-				if commit != tt.commit {
-					t.Errorf("expected commit %q, got %q", tt.commit, commit)
-				}
-				return nil
-			}
 
 			payload, err := ioutil.ReadFile(tt.payloadFile)
 			if err != nil {
