@@ -31,7 +31,7 @@ func (s *githubHook) installationToken(appID, installationID int, cfg brigade.Gi
 	aidStr := strconv.Itoa(appID)
 	// We need to perform auth here, and then inject the token into the
 	// body so that the app can use it.
-	tok, err := JWT(aidStr, s.key)
+	tok, err := getSignedJSONWebToken(aidStr, s.key)
 	if err != nil {
 		return "", time.Time{}, err
 	}
