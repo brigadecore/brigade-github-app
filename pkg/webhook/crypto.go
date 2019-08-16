@@ -19,19 +19,19 @@ func SHA1HMAC(salt, message []byte) string {
 	return fmt.Sprintf("sha1=%x", sum)
 }
 
-func JWT(appID string, keyPEM []byte) (string, error) {
+// getSignedJSONWebToken returns a signed JSON web token.
+func getSignedJSONWebToken(appID string, keyPEM []byte) (string, error) {
 	key, err := jwt.ParseRSAPrivateKeyFromPEM(keyPEM)
 	if err != nil {
 		return "", err
 	}
-
 	now := time.Now()
-	claim := &jwt.StandardClaims{
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(5 * time.Minute).Unix(),
-		Issuer:    appID,
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claim)
-	return token.SignedString(key)
+	return jwt.NewWithClaims(
+		jwt.SigningMethodRS256,
+		jwt.StandardClaims{
+			IssuedAt:  now.Unix(),
+			ExpiresAt: now.Add(5 * time.Minute).Unix(),
+			Issuer:    appID,
+		},
+	).SignedString(key)
 }
