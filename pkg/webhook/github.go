@@ -28,8 +28,6 @@ var ErrAuthFailed = errors.New("Auth Failed")
 
 type githubHook struct {
 	store                   storage.Store
-	getFile                 fileGetter
-	createStatus            statusCreator
 	updateIssueCommentEvent iceUpdater
 	opts                    GithubOpts
 	allowedAuthors          []string
@@ -46,24 +44,17 @@ type GithubOpts struct {
 	EmittedEvents       []string
 }
 
-type fileGetter func(commit, path string, proj *brigade.Project) ([]byte, error)
-
-type statusCreator func(commit string, proj *brigade.Project, status *github.RepoStatus) error
-
 type iceUpdater func(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte)
 
 // NewGithubHookHandler creates a GitHub webhook handler.
 func NewGithubHookHandler(s storage.Store, authors []string, x509Key []byte, opts GithubOpts) gin.HandlerFunc {
 	gh := &githubHook{
 		store:                   s,
-		getFile:                 getFileFromGithub,
-		createStatus:            setRepoStatus,
 		updateIssueCommentEvent: updateIssueCommentEvent,
 		allowedAuthors:          authors,
 		key:                     x509Key,
 		opts:                    opts,
 	}
-
 	return gh.Handle
 }
 
@@ -671,10 +662,6 @@ func (s *githubHook) shouldEmit(eventType string) bool {
 		}
 	}
 	return false
-}
-
-func getFileFromGithub(commit, path string, proj *brigade.Project) ([]byte, error) {
-	return GetFileContents(proj, commit, path)
 }
 
 // build creates a new brigade.Build using the info provided
