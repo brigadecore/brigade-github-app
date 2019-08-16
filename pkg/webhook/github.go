@@ -656,17 +656,10 @@ func (s *githubHook) isAllowedAuthor(author string) bool {
 }
 
 func (s *githubHook) shouldEmit(eventType string) bool {
-	eventAction := strings.Split(eventType, ":")
-
-	var event, action string
-	event = eventAction[0]
-	if len(eventAction) > 1 {
-		action = eventAction[1]
-	}
-
-	for _, e := range s.opts.EmittedEvents {
-
-		if e == "*" || e == event || e == event+":"+action {
+	unqualifiedEventType := strings.Split(eventType, ":")[0]
+	for _, emitableEvent := range s.opts.EmittedEvents {
+		if eventType == emitableEvent || unqualifiedEventType == emitableEvent ||
+			emitableEvent == "*" {
 			return true
 		}
 	}
