@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/brigadecore/brigade-github-app/pkg/check"
+	ghlib "github.com/brigadecore/brigade-github-app/pkg/github"
 	"github.com/brigadecore/brigade-github-app/pkg/webhook"
-
 	"github.com/google/go-github/github"
 )
 
@@ -86,7 +86,11 @@ func main() {
 
 	// Once we have the token, we can switch from the app token to the
 	// installation token.
-	ghc, err := webhook.InstallationTokenClient(token, ghBaseURL, ghUploadURL)
+	ghc, err := ghlib.NewClientFromInstallationToken(
+		ghBaseURL,
+		ghUploadURL,
+		token,
+	)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(3)
