@@ -71,8 +71,27 @@ func NewGithubHookHandler(s storage.Store, authors []string, x509Key []byte, opt
 //
 // It does this by sniffing the event from the header, and routing accordingly.
 func (s *githubHook) Handle(c *gin.Context) {
-	event := c.Request.Header.Get("X-GitHub-Event")
-	switch event {
+	eventType := c.Request.Header.Get("X-GitHub-Event")
+	var body []byte
+	var err error
+	if c.Request.Body != nil {
+		defer c.Request.Body.Close()
+		if body, err = ioutil.ReadAll(c.Request.Body); err != nil {
+			log.Printf("Failed to read body: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+			return
+		}
+	}
+	var event interface{}
+	if len(body) > 1 {
+		event, err = github.ParseWebHook(eventType, body)
+		if err != nil {
+			log.Printf("Failed to parse body: %s", err)
+			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
+			return
+		}
+	}
+	switch eventType {
 	case "ping":
 		log.Print("Received ping from GitHub")
 		c.JSON(200, gin.H{"message": "OK"})
@@ -84,13 +103,13 @@ func (s *githubHook) Handle(c *gin.Context) {
 		"push",
 		"release",
 		"status":
-		s.handleEvent(c, event)
+		s.handleEvent(c, eventType, event, body)
 		return
 	// Added
 	case "check_suite", "check_run":
-		s.handleCheck(c, event)
+		s.handleCheck(c, eventType, event, body)
 	case "issue_comment":
-		s.handleIssueComment(c, event)
+		s.handleIssueComment(c, eventType, event, body)
 	default:
 		// Issue #127: Don't return an error for unimplemented events.
 		log.Printf("Unsupported event %q", event)
@@ -103,29 +122,19 @@ func (s *githubHook) Handle(c *gin.Context) {
 //
 // This is where handling should go for events that can just flow through
 // in the form of a Brigade event without further processing
-func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
-	body, err := ioutil.ReadAll(c.Request.Body)
-	if err != nil {
-		log.Printf("Failed to read body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-	defer c.Request.Body.Close()
-
-	e, err := github.ParseWebHook(eventType, body)
-	if err != nil {
-		log.Printf("Failed to parse body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-
+func (s *githubHook) handleEvent(
+	c *gin.Context,
+	eventType string,
+	event interface{},
+	body []byte,
+) {
 	var repo string
 	var rev brigade.Revision
 	// Used only for check suite
 	var pre *github.PullRequestEvent
 	var action string
 
-	switch e := e.(type) {
+	switch e := event.(type) {
 	case *github.CommitCommentEvent:
 		action = e.GetAction()
 		repo = e.Repo.GetFullName()
@@ -216,31 +225,18 @@ func (s *githubHook) handleEvent(c *gin.Context, eventType string) {
 //
 // These require a bit more processing, including retrieving corresponding
 // GitHub App particulars and authorization token
-func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
-	body, err := ioutil.ReadAll(c.Request.Body)
-	if err != nil {
-		log.Printf("Failed to read body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-	defer c.Request.Body.Close()
-
-	log.Print(string(body))
-
+func (s *githubHook) handleCheck(
+	c *gin.Context,
+	eventType string,
+	event interface{},
+	body []byte,
+) {
 	var action string
 	var repo string
 	var rev brigade.Revision
 	var res *Payload
-	switch eventType {
-	case "check_suite":
-		e := &github.CheckSuiteEvent{}
-		err := json.Unmarshal(body, e)
-		if err != nil {
-			log.Printf("Failed to parse body: %s", err)
-			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-			return
-		}
-
+	switch e := event.(type) {
+	case *github.CheckSuiteEvent:
 		res = &Payload{
 			Body:   e,
 			AppID:  int(e.CheckSuite.App.GetID()),
@@ -259,15 +255,7 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 		rev.Commit = e.CheckSuite.GetHeadSHA()
 		rev.Ref = e.CheckSuite.GetHeadBranch()
 
-	case "check_run":
-		e := &github.CheckRunEvent{}
-		err := json.Unmarshal(body, e)
-		if err != nil {
-			log.Printf("Failed to parse body: %s", err)
-			c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-			return
-		}
-
+	case *github.CheckRunEvent:
 		res = &Payload{
 			Body:   e,
 			AppID:  int(e.CheckRun.App.GetID()),
@@ -324,29 +312,19 @@ func (s *githubHook) handleCheck(c *gin.Context, eventType string) {
 // This extra context empowers consumers of the resulting Brigade event with the ability
 // to (re-)trigger actions on the Pull Request itself, such as (re-)running Check Runs,
 // Check Suites or otherwise running jobs that consume/use the PR commit/branch data.
-func (s *githubHook) handleIssueComment(c *gin.Context, eventType string) {
-	body, err := ioutil.ReadAll(c.Request.Body)
-	if err != nil {
-		log.Printf("Failed to read body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-	defer c.Request.Body.Close()
-
-	e, err := github.ParseWebHook(eventType, body)
-	if err != nil {
-		log.Printf("Failed to parse body: %s", err)
-		c.JSON(http.StatusBadRequest, gin.H{"status": "Malformed body"})
-		return
-	}
-
+func (s *githubHook) handleIssueComment(
+	c *gin.Context,
+	eventType string,
+	event interface{},
+	body []byte,
+) {
 	var action string
 	var repo string
 	var rev brigade.Revision
 	var payload []byte
 	var ice *github.IssueCommentEvent
 
-	switch e := e.(type) {
+	switch e := event.(type) {
 	case *github.IssueCommentEvent:
 		ice = e
 		action = e.GetAction()
