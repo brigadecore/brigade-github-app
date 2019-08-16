@@ -171,7 +171,7 @@ type events []string
 
 func (a *events) Set(value string) error {
 	for _, aa := range strings.Split(value, ",") {
-		*a = append(*a, strings.ToUpper(aa))
+		*a = append(*a, aa)
 	}
 	return nil
 }
