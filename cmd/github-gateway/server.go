@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	gin "gopkg.in/gin-gonic/gin.v1"
+	"gopkg.in/gin-gonic/gin.v1"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/brigadecore/brigade/pkg/storage/kube"
@@ -26,6 +26,8 @@ var (
 	keyFile        string
 	allowedAuthors authors
 	emittedEvents  events
+
+	reportBuildFailures bool
 )
 
 // defaultAllowedAuthors is the default set of authors allowed to PR
@@ -43,6 +45,7 @@ func init() {
 	flag.StringVar(&keyFile, "key-file", "/etc/brigade-github-app/key.pem", "path to x509 key for GitHub app")
 	flag.Var(&allowedAuthors, "authors", "allowed author associations, separated by commas (COLLABORATOR, CONTRIBUTOR, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR, MEMBER, OWNER, NONE)")
 	flag.Var(&emittedEvents, "events", "events to be emitted and passed to worker, separated by commas (defaults to `*`, which matches everything)")
+	flag.BoolVar(&reportBuildFailures, "report-build-failures", false, "report build failures via issue comments")
 }
 
 func main() {
@@ -111,6 +114,7 @@ func main() {
 		AppID:               envOrInt("APP_ID", 0),
 		DefaultSharedSecret: os.Getenv("DEFAULT_SHARED_SECRET"),
 		EmittedEvents:       emittedEvents,
+		ReportBuildFailures: reportBuildFailures,
 	}
 
 	clientset, err := kube.GetClient(master, kubeconfig)
@@ -120,14 +124,25 @@ func main() {
 
 	store := kube.New(clientset, namespace)
 
+	hook := webhook.NewGithubHook(store, allowedAuthors, key, ghOpts)
+
+	if ghOpts.ReportBuildFailures {
+		reporter := webhook.NewBuildReporter(clientset, store, namespace)
+		stop := make(chan struct{})
+		defer close(stop)
+		go reporter.Run(1, stop)
+
+		hook.BuildReporter = reporter
+	}
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 
 	events := router.Group("/events")
 	{
 		events.Use(gin.Logger())
-		events.POST("/github", webhook.NewGithubHookHandler(store, allowedAuthors, key, ghOpts))
-		events.POST("/github/:app/:inst", webhook.NewGithubHookHandler(store, allowedAuthors, key, ghOpts))
+		events.POST("/github", hook.Handle)
+		events.POST("/github/:app/:inst", hook.Handle)
 	}
 
 	router.GET("/healthz", healthz)
