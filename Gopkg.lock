@@ -492,6 +492,7 @@
     "util/homedir",
     "util/integer",
     "util/retry",
+    "util/workqueue",
   ]
   pruneopts = ""
   revision = "36368dede29baa5ecd253416d70ddc0c76bde69b"
@@ -509,6 +510,12 @@
     "golang.org/x/oauth2",
     "gopkg.in/gin-gonic/gin.v1",
     "k8s.io/api/core/v1",
+    "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/fields",
+    "k8s.io/apimachinery/pkg/util/wait",
+    "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/tools/cache",
+    "k8s.io/client-go/util/workqueue",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
