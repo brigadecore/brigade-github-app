@@ -2,13 +2,14 @@ package webhook
 
 import (
 	"encoding/json"
+
 	"github.com/brigadecore/brigade/pkg/brigade"
 	"github.com/google/go-github/github"
 )
 
 type buildOpts struct {
 	tok     string
-	issueId int
+	issueID int
 }
 
 func (s *githubHook) icePayloadToBuildOpts(ice *github.IssueCommentEvent, proj *brigade.Project, payload []byte) buildOpts {
@@ -26,7 +27,7 @@ func (s *githubHook) icePayloadToBuildOpts(ice *github.IssueCommentEvent, proj *
 			opts.tok = tok
 		}
 
-		opts.issueId = int(ice.GetIssue().GetID())
+		opts.issueID = int(ice.GetIssue().GetID())
 	}
 	return opts
 }
@@ -39,7 +40,7 @@ func (s *githubHook) preToBuildOpts(pre *github.PullRequestEvent, proj *brigade.
 			opts.tok = tok
 		}
 
-		opts.issueId = int(pre.GetPullRequest().GetID())
+		opts.issueID = int(pre.GetPullRequest().GetID())
 	}
 	return opts
 }
@@ -50,9 +51,9 @@ func (s *githubHook) checkEventToBuildOpts(e interface{}, tok string) buildOpts 
 	}
 	switch e := e.(type) {
 	case *github.CheckSuiteEvent:
-		opts.issueId = int(e.GetCheckSuite().PullRequests[0].GetID())
+		opts.issueID = int(e.GetCheckSuite().PullRequests[0].GetID())
 	case *github.CheckRunEvent:
-		opts.issueId = int(e.GetCheckRun().PullRequests[0].GetID())
+		opts.issueID = int(e.GetCheckRun().PullRequests[0].GetID())
 	}
 	return opts
 }

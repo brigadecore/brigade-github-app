@@ -33,8 +33,8 @@ type githubHook struct {
 	allowedAuthors          []string
 	// key is the x509 certificate key as ASCII-armored (PEM) data
 	key []byte
-	// BuildReporter is used for reporting build failures via issue comments
-	BuildReporter *BuildReporter
+	// buildReporter is used for reporting build failures via issue comments
+	buildReporter *BuildReporter
 }
 
 // GithubOpts provides options for configuring a GitHub hook
@@ -50,19 +50,16 @@ type GithubOpts struct {
 type iceUpdater func(c *gin.Context, s *githubHook, ice *github.IssueCommentEvent, rev brigade.Revision, proj *brigade.Project, body []byte) (brigade.Revision, []byte)
 
 // NewGithubHookHandler creates a GitHub webhook handler.
-func NewGithubHookHandler(s storage.Store, authors []string, x509Key []byte, opts GithubOpts) gin.HandlerFunc {
-	return NewGithubHook(s, authors, x509Key, opts).Handle
-}
-
-func NewGithubHook(s storage.Store, authors []string, x509Key []byte, opts GithubOpts) *githubHook {
+func NewGithubHookHandler(s storage.Store, authors []string, x509Key []byte, reporter *BuildReporter, opts GithubOpts) gin.HandlerFunc {
 	gh := &githubHook{
 		store:                   s,
 		updateIssueCommentEvent: updateIssueCommentEvent,
 		allowedAuthors:          authors,
 		key:                     x509Key,
 		opts:                    opts,
+		buildReporter:           reporter,
 	}
-	return gh
+	return gh.Handle
 }
 
 // Handle routes a webhook to its appropriate handler.
@@ -648,8 +645,8 @@ func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byt
 	if err != nil {
 		return err
 	}
-	if opts.tok != "" && opts.issueId != 0 && s.opts.ReportBuildFailures {
-		s.BuildReporter.Add(b, opts.issueId, opts.tok)
+	if opts.tok != "" && opts.issueID != 0 && s.opts.ReportBuildFailures {
+		s.buildReporter.Add(b, opts.issueID, opts.tok)
 	}
 	return nil
 }

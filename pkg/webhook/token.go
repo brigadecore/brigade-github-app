@@ -1,9 +1,10 @@
 package webhook
 
 import (
+	"time"
+
 	"github.com/brigadecore/brigade/pkg/brigade"
 	"github.com/google/go-github/github"
-	"time"
 )
 
 func (s *githubHook) prToInstallationToken(pre *github.PullRequestEvent, proj *brigade.Project) (string, *time.Time, error) {

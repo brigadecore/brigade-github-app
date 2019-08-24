@@ -124,16 +124,15 @@ func main() {
 
 	store := kube.New(clientset, namespace)
 
-	hook := webhook.NewGithubHook(store, allowedAuthors, key, ghOpts)
-
+	var reporter *webhook.BuildReporter
 	if ghOpts.ReportBuildFailures {
-		reporter := webhook.NewBuildReporter(clientset, store, namespace)
+		reporter = webhook.NewBuildReporter(clientset, store, namespace)
 		stop := make(chan struct{})
 		defer close(stop)
 		go reporter.Run(1, stop)
-
-		hook.BuildReporter = reporter
 	}
+
+	hookHandler := webhook.NewGithubHookHandler(store, allowedAuthors, key, reporter, ghOpts)
 
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -141,8 +140,8 @@ func main() {
 	events := router.Group("/events")
 	{
 		events.Use(gin.Logger())
-		events.POST("/github", hook.Handle)
-		events.POST("/github/:app/:inst", hook.Handle)
+		events.POST("/github", hookHandler)
+		events.POST("/github/:app/:inst", hookHandler)
 	}
 
 	router.GET("/healthz", healthz)

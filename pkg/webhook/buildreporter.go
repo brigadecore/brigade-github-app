@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -199,7 +199,7 @@ func (c *BuildReporter) Add(b *brigade.Build, issueNumber int, tok string) {
 	}
 
 	c.indexer.Add(&v1.Pod{
-		ObjectMeta: meta_v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: c.ns,
 		},
