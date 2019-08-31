@@ -78,13 +78,17 @@ func (c *BuildReporter) processBuildPod(key string) error {
 			return fmt.Errorf("unexpected phase: %s", phase)
 		}
 
-		ctx := c.podToBuild[pod.Name]
+		ctx, ok := c.podToBuild[pod.Name]
+		if !ok {
+			fmt.Printf("skipping non-brigade pod %s\n", pod.GetName())
+			return nil
+		}
 
 		msg := fmt.Sprintf("Build failed. Please run `brig build logs --init %s` to investigate the cause.", ctx.underlying.ID)
 
 		proj, err := c.store.GetProject(ctx.underlying.ProjectID)
 		if err != nil {
-			c.Logf("%v", err)
+			c.Logf("failed to retrieve project via %s: %v", ctx.underlying.ProjectID, err)
 			return err
 		}
 

@@ -211,7 +211,12 @@ func (s *githubHook) handleEvent(
 		// TODO: do we return here (e.g. stop the PR hook) if we get to this point
 	}
 
-	s.scheduleBuild(eventType, action, rev, body, proj, s.preToBuildOpts(pre, proj))
+	opts, err := s.preToBuildOpts(pre, proj)
+	if err != nil {
+		log.Printf("error constructing build opts from pull request event: %v", err)
+	}
+
+	s.scheduleBuild(eventType, action, rev, body, proj, opts)
 
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
@@ -359,7 +364,12 @@ func (s *githubHook) handleIssueComment(
 		rev.Ref = "refs/heads/master"
 	}
 
-	s.scheduleBuild(eventType, action, rev, payload, proj, s.icePayloadToBuildOpts(ice, proj, payload))
+	opts, err := s.icePayloadToBuildOpts(ice, proj, payload)
+	if err != nil {
+		log.Printf("error constructing build opts from issue comment event: %v", err)
+	}
+
+	s.scheduleBuild(eventType, action, rev, payload, proj, opts)
 
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }

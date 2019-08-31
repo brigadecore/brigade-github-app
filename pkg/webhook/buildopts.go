@@ -12,7 +12,7 @@ type buildOpts struct {
 	issueID int
 }
 
-func (s *githubHook) icePayloadToBuildOpts(ice *github.IssueCommentEvent, proj *brigade.Project, payload []byte) buildOpts {
+func (s *githubHook) icePayloadToBuildOpts(ice *github.IssueCommentEvent, proj *brigade.Project, payload []byte) (buildOpts, error) {
 	opts := buildOpts{}
 	if ice != nil {
 		// Reuse the installation token generated for the payload if exists
@@ -23,26 +23,32 @@ func (s *githubHook) icePayloadToBuildOpts(ice *github.IssueCommentEvent, proj *
 				opts.tok = res.Token
 			}
 		} else {
-			tok, _, _ := s.iceToIntsallationToken(ice, proj)
+			tok, _, err := s.iceToIntsallationToken(ice, proj)
+			if err != nil {
+				return opts, err
+			}
 			opts.tok = tok
 		}
 
 		opts.issueID = int(ice.GetIssue().GetID())
 	}
-	return opts
+	return opts, nil
 }
 
-func (s *githubHook) preToBuildOpts(pre *github.PullRequestEvent, proj *brigade.Project) buildOpts {
+func (s *githubHook) preToBuildOpts(pre *github.PullRequestEvent, proj *brigade.Project) (buildOpts, error) {
 	opts := buildOpts{}
 	if pre != nil {
-		tok, _, _ := s.prToInstallationToken(pre, proj)
+		tok, _, err := s.prToInstallationToken(pre, proj)
+		if err != nil {
+			return opts, err
+		}
 		if tok != "" {
 			opts.tok = tok
 		}
 
 		opts.issueID = int(pre.GetPullRequest().GetID())
 	}
-	return opts
+	return opts, nil
 }
 
 func (s *githubHook) checkEventToBuildOpts(e interface{}, tok string) buildOpts {
