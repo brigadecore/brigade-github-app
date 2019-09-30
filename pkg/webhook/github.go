@@ -10,13 +10,12 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/google/go-github/github"
-	gin "gopkg.in/gin-gonic/gin.v1"
-
+	ghlib "github.com/brigadecore/brigade-github-app/pkg/github"
 	"github.com/brigadecore/brigade/pkg/brigade"
 	"github.com/brigadecore/brigade/pkg/storage"
+	"github.com/google/go-github/github"
+	gin "gopkg.in/gin-gonic/gin.v1"
 )
 
 const hubSignatureHeader = "X-Hub-Signature"
@@ -275,7 +274,13 @@ func (s *githubHook) handleCheck(
 		return
 	}
 
-	tok, timeout, err := s.getInstallationToken(res.AppID, res.InstID, proj)
+	tok, timeout, err := ghlib.GetInstallationToken(
+		proj.Github.BaseURL,
+		proj.Github.UploadURL,
+		int64(res.AppID),
+		int64(res.InstID),
+		s.key,
+	)
 	if err != nil {
 		log.Printf("Failed to negotiate a token: %s", err)
 		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
@@ -369,7 +374,13 @@ func updateIssueCommentEvent(c *gin.Context, s *githubHook, ice *github.IssueCom
 	appID := s.opts.AppID
 	instID := ice.Installation.GetID()
 
-	tok, timeout, err := s.getInstallationToken(appID, int(instID), proj)
+	tok, timeout, err := ghlib.GetInstallationToken(
+		proj.Github.BaseURL,
+		proj.Github.UploadURL,
+		int64(appID),
+		instID,
+		s.key,
+	)
 	if err != nil {
 		log.Printf("Failed to negotiate a token: %s", err)
 		c.JSON(http.StatusForbidden, gin.H{"status": ErrAuthFailed})
@@ -470,25 +481,15 @@ func (s *githubHook) scheduleBuild(eventType, action string, rev brigade.Revisio
 	}
 }
 
-// getInstallationToken acquires a token and timeout using a provided app ID,
-// installation ID and brigade project
-func (s *githubHook) getInstallationToken(appID int, instID int, proj *brigade.Project) (string, time.Time, error) {
-	if appID == 0 || instID == 0 {
-		return "", time.Time{}, fmt.Errorf("App ID and Installation ID must both be set. App: %d, Installation: %d", appID, instID)
-	}
-
-	tok, timeout, err := s.installationToken(int(appID), int(instID), proj.Github)
-	if err != nil {
-		return "", time.Time{}, fmt.Errorf("Failed to negotiate a token: %s", err)
-	}
-	return tok, timeout, nil
-}
-
 // getPRFromIssueComment fetches a pull request from a corresponding github.IssueCommentEvent
 func getPRFromIssueComment(c *gin.Context, s *githubHook, token string, ice *github.IssueCommentEvent, proj *brigade.Project) (*github.PullRequest, error) {
 	repo := ice.Repo.GetFullName()
 
-	client, err := InstallationTokenClient(token, proj.Github.BaseURL, proj.Github.UploadURL)
+	client, err := ghlib.NewClientFromInstallationToken(
+		proj.Github.BaseURL,
+		proj.Github.UploadURL,
+		token,
+	)
 	if err != nil {
 		log.Printf("Failed to create a new installation token client: %s", err)
 		return nil, ErrAuthFailed
@@ -535,13 +536,13 @@ func (s *githubHook) prToCheckSuite(c *gin.Context, pre *github.PullRequestEvent
 	appID := s.opts.AppID
 	instID := pre.Installation.GetID()
 
-	tok, _, err := s.getInstallationToken(appID, int(instID), proj)
-	if err != nil {
-		log.Printf("Failed to negotiate a token: %s", err)
-		return ErrAuthFailed
-	}
-
-	client, err := InstallationTokenClient(tok, proj.Github.BaseURL, proj.Github.UploadURL)
+	client, err := ghlib.NewClientFromKeyPEM(
+		proj.Github.BaseURL,
+		proj.Github.UploadURL,
+		int64(appID),
+		instID,
+		s.key,
+	)
 	if err != nil {
 		log.Printf("Failed to create a new installation token client: %s", err)
 		return ErrAuthFailed

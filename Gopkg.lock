@@ -213,7 +213,10 @@
 [[projects]]
   digest = "1:381bcbeb112a51493d9d998bbba207a529c73dbb49b3fd789e48c63fac1f192c"
   name = "github.com/stretchr/testify"
-  packages = ["assert"]
+  packages = [
+    "assert",
+    "require",
+  ]
   pruneopts = ""
   revision = "ffdc059bfe9ce6a4e144ba849dbedead332c6053"
   version = "v1.3.0"
@@ -506,6 +509,7 @@
     "github.com/dgrijalva/jwt-go",
     "github.com/google/go-github/github",
     "github.com/stretchr/testify/assert",
+    "github.com/stretchr/testify/require",
     "golang.org/x/oauth2",
     "gopkg.in/gin-gonic/gin.v1",
     "k8s.io/api/core/v1",
