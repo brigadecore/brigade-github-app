@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 
 	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,10 +73,27 @@ func (s *store) GetWorkerLog(worker *brigade.Worker) (string, error) {
 	return buf.String(), nil
 }
 
-func (s *store) getWorkerLogStream(follow bool, worker *brigade.Worker) (io.ReadCloser, error) {
-	req := s.client.CoreV1().Pods(s.namespace).GetLogs(worker.ID, &v1.PodLogOptions{
-		Follow: follow,
-	})
+func (s *store) GetWorkerInitLog(worker *brigade.Worker) (string, error) {
+	buf := new(bytes.Buffer)
+	r, err := s.getWorkerLogStream(false, worker, "vcs-sidecar")
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	io.Copy(buf, r)
+	return buf.String(), nil
+}
+
+func (s *store) getWorkerLogStream(follow bool, worker *brigade.Worker, container ...string) (io.ReadCloser, error) {
+	tailAllLines := int64(math.MaxInt64)
+	opts := &v1.PodLogOptions{
+		Follow:    follow,
+		TailLines: &tailAllLines,
+	}
+	if len(container) > 0 {
+		opts.Container = container[0]
+	}
+	req := s.client.CoreV1().Pods(s.namespace).GetLogs(worker.ID, opts)
 
 	readCloser, err := req.Stream()
 	if err != nil {

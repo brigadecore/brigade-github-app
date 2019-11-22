@@ -49,9 +49,9 @@ func SecretFromProject(project *brigade.Project) (v1.Secret, error) {
 		project.ID = brigade.ProjectID(project.Name)
 	}
 
-	// The marshal on SecretsMap redacts secrts, so we cast and marshal as a raw
-	// map[string]string
-	var secrets map[string]string = project.Secrets
+	// The marshal on SecretsMap redacts secrets, so we cast and marshal as a raw
+	// map[string]interface{}
+	var secrets map[string]interface{} = project.Secrets
 	secretsJSON, err := json.Marshal(secrets)
 	if err != nil {
 		return v1.Secret{}, err
@@ -87,6 +87,7 @@ func SecretFromProject(project *brigade.Project) (v1.Secret, error) {
 
 			"repository": project.Repo.Name,
 			"sshKey":     project.Repo.SSHKey,
+			"sshCert":    project.Repo.SSHCert,
 			"cloneURL":   project.Repo.CloneURL,
 
 			"secrets": string(secretsJSON),
@@ -194,13 +195,14 @@ func NewProjectFromSecret(secret *v1.Secret, namespace string) (*brigade.Project
 	proj.DefaultScriptName = sv.String("defaultScriptName")
 
 	proj.Repo = brigade.Repo{
-		Name: def(sv.String("repository"), proj.Name),
+		Name: sv.String("repository"),
 		// Note that we have to undo the key escaping.
 		SSHKey:   strings.Replace(sv.String("sshKey"), "$", "\n", -1),
+		SSHCert:  strings.Replace(sv.String("sshCert"), "$", "\n", -1),
 		CloneURL: sv.String("cloneURL"),
 	}
 
-	envVars := map[string]string{}
+	envVars := map[string]interface{}{}
 	if d := sv.Bytes("secrets"); len(d) > 0 {
 		if err := json.Unmarshal(d, &envVars); err != nil {
 			return nil, err
@@ -221,6 +223,7 @@ func NewProjectFromSecret(secret *v1.Secret, namespace string) (*brigade.Project
 	proj.InitGitSubmodules = strings.ToLower(def(sv.String("initGitSubmodules"), "false")) == "true"
 	proj.AllowPrivilegedJobs = strings.ToLower(def(sv.String("allowPrivilegedJobs"), "true")) == "true"
 	proj.AllowHostMounts = strings.ToLower(def(sv.String("allowHostMounts"), "false")) == "true"
+	proj.ImagePullSecrets = sv.String("imagePullSecrets")
 
 	proj.BrigadejsPath = sv.String("brigadejsPath")
 	proj.WorkerCommand = sv.String("workerCommand")

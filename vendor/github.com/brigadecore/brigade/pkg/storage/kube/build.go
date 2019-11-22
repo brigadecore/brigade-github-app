@@ -103,11 +103,15 @@ func (s *store) CreateBuild(build *brigade.Build) error {
 		Type: secretTypeBuild,
 		Data: map[string][]byte{
 			"script":  build.Script,
+			"config":  build.Config,
 			"payload": build.Payload,
 		},
 		StringData: map[string]string{
 			"build_id":       buildName,
 			"build_name":     buildName,
+			"short_title":    build.ShortTitle,
+			"long_title":     build.LongTitle,
+			"clone_url":      build.CloneURL,
 			"commit_id":      build.Revision.Commit,
 			"commit_ref":     build.Revision.Ref,
 			"event_provider": build.Provider,
@@ -199,10 +203,13 @@ func NewBuildFromSecret(secret v1.Secret) *brigade.Build {
 	lbs := secret.ObjectMeta.Labels
 	sv := SecretValues(secret.Data)
 	return &brigade.Build{
-		ID:        lbs["build"],
-		ProjectID: lbs["project"],
-		Type:      sv.String("event_type"),
-		Provider:  sv.String("event_provider"),
+		ID:         lbs["build"],
+		ProjectID:  lbs["project"],
+		Type:       sv.String("event_type"),
+		Provider:   sv.String("event_provider"),
+		ShortTitle: sv.String("short_title"),
+		LongTitle:  sv.String("long_title"),
+		CloneURL:   sv.String("clone_url"),
 		Revision: &brigade.Revision{
 			Commit: sv.String("commit_id"),
 			Ref:    sv.String("commit_ref"),
