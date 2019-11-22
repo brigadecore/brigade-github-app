@@ -1,6 +1,6 @@
 [[constraint]]
   name = "github.com/brigadecore/brigade"
-  revision = "1eec8b07ca785154cf4df0b697378e205d7a4397"
+  revision = "509b6edd37222cade4b3970554088b2046b46a44"
 
 [[constraint]]
   name = "github.com/google/go-github"
