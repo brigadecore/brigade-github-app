@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	ghlib "github.com/brigadecore/brigade-github-app/pkg/github"
@@ -24,6 +25,11 @@ const hubSignatureHeader = "X-Hub-Signature"
 //
 // This is usually indicative of an auth failure between the client library and GitHub
 var ErrAuthFailed = errors.New("Auth Failed")
+
+var (
+	branchRefRegex = regexp.MustCompile("refs/heads/(.+)")
+	tagRefRegex    = regexp.MustCompile("refs/tags/(.+)")
+)
 
 type githubHook struct {
 	store                   storage.Store
@@ -123,6 +129,7 @@ func (s *githubHook) handleEvent(
 	// Used only for check suite
 	var pre *github.PullRequestEvent
 	var action string
+	var shortTitle, longTitle string
 
 	switch e := event.(type) {
 	case *github.CommitCommentEvent:
@@ -149,17 +156,19 @@ func (s *githubHook) handleEvent(
 		}
 		pre = e
 		action = e.GetAction()
-
+		shortTitle, longTitle = getTitlesFromPR(pre.PullRequest)
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.PullRequest.Head.GetSHA()
 		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
 	case *github.PullRequestReviewEvent:
 		action = e.GetAction()
+		shortTitle, longTitle = getTitlesFromPR(e.PullRequest)
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.PullRequest.Head.GetSHA()
 		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
 	case *github.PullRequestReviewCommentEvent:
 		action = e.GetAction()
+		shortTitle, longTitle = getTitlesFromPR(e.PullRequest)
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.PullRequest.Head.GetSHA()
 		rev.Ref = fmt.Sprintf("refs/pull/%d/head", e.PullRequest.GetNumber())
@@ -169,6 +178,7 @@ func (s *githubHook) handleEvent(
 			c.JSON(http.StatusOK, gin.H{"status": "build skipped on branch deletion"})
 			return
 		}
+		shortTitle, longTitle = getTitlesFromPushEvent(e)
 		repo = e.Repo.GetFullName()
 		rev.Commit = e.HeadCommit.GetID()
 		rev.Ref = e.GetRef()
@@ -206,7 +216,7 @@ func (s *githubHook) handleEvent(
 		// TODO: do we return here (e.g. stop the PR hook) if we get to this point
 	}
 
-	s.scheduleBuild(eventType, action, rev, body, proj)
+	s.scheduleBuild(eventType, action, shortTitle, longTitle, rev, body, proj)
 
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
@@ -294,7 +304,7 @@ func (s *githubHook) handleCheck(
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "JSON encoding error"})
 	}
 
-	s.scheduleBuild(eventType, action, rev, payload, proj)
+	s.scheduleBuild(eventType, action, "", "", rev, payload, proj)
 
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
@@ -337,19 +347,23 @@ func (s *githubHook) handleIssueComment(
 		return
 	}
 
-	// If the IssueCommentEvent isn't nil and the corresponding action is one of
-	// 'created' or 'edited', check to see if it belongs to a Pull Request and if so,
-	// perform further processing
-	if ice != nil && (action == "created" || action == "edited") {
-		// If the issue is a pull request we should fetch and set corresponding
-		// revision values.
-		if ice.Issue.IsPullRequest() {
-			// If author association of issue comment is not in allowed list, we return,
-			// as we don't wish to populate event with actionable data (for requesting check runs, etc.)
-			if assoc := ice.Comment.GetAuthorAssociation(); !s.isAllowedAuthor(assoc) {
-				log.Printf("not fetching corresponding pull request as issue comment is from disallowed author %s", assoc)
-			} else {
-				rev, payload = s.updateIssueCommentEvent(c, s, ice, rev, proj, body)
+	var shortTitle, longTitle string
+	if ice != nil {
+		shortTitle, longTitle = getTitlesFromIssue(ice.Issue)
+
+		// If the corresponding action is one of 'created' or 'edited', check to see
+		// if it belongs to a Pull Request and if so, perform further processing
+		if action == "created" || action == "edited" {
+			// If the issue is a pull request we should fetch and set corresponding
+			// revision values.
+			if ice.Issue.IsPullRequest() {
+				// If author association of issue comment is not in allowed list, we return,
+				// as we don't wish to populate event with actionable data (for requesting check runs, etc.)
+				if assoc := ice.Comment.GetAuthorAssociation(); !s.isAllowedAuthor(assoc) {
+					log.Printf("not fetching corresponding pull request as issue comment is from disallowed author %s", assoc)
+				} else {
+					rev, payload = s.updateIssueCommentEvent(c, s, ice, rev, proj, body)
+				}
 			}
 		}
 	}
@@ -360,7 +374,7 @@ func (s *githubHook) handleIssueComment(
 		rev.Ref = "refs/heads/master"
 	}
 
-	s.scheduleBuild(eventType, action, rev, payload, proj)
+	s.scheduleBuild(eventType, action, shortTitle, longTitle, rev, payload, proj)
 
 	c.JSON(http.StatusOK, gin.H{"status": "Complete"})
 }
@@ -472,12 +486,27 @@ func marshalWithGithubPayload(res *Payload, body []byte) ([]byte, error) {
 
 // scheduleBuild schedules a Brigade build both for the raw eventType
 // and for each action of the event, when applicable
-func (s *githubHook) scheduleBuild(eventType, action string, rev brigade.Revision, payload []byte, proj *brigade.Project) {
+func (s *githubHook) scheduleBuild(
+	eventType string,
+	action string,
+	shortTitle string,
+	longTitle string,
+	rev brigade.Revision,
+	payload []byte,
+	proj *brigade.Project,
+) {
 	// Schedule a build using the raw eventType
-	s.build(eventType, rev, payload, proj)
+	s.build(eventType, shortTitle, longTitle, rev, payload, proj)
 	// For events that have an action, schedule a second build for eventType:action
 	if action != "" {
-		s.build(fmt.Sprintf("%s:%s", eventType, action), rev, payload, proj)
+		s.build(
+			fmt.Sprintf("%s:%s", eventType, action),
+			shortTitle,
+			longTitle,
+			rev,
+			payload,
+			proj,
+		)
 	}
 }
 
@@ -636,16 +665,25 @@ func (s *githubHook) shouldEmit(eventType string) bool {
 }
 
 // build creates a new brigade.Build using the info provided
-func (s *githubHook) build(eventType string, rev brigade.Revision, payload []byte, proj *brigade.Project) error {
+func (s *githubHook) build(
+	eventType string,
+	shortTitle string,
+	longTitle string,
+	rev brigade.Revision,
+	payload []byte,
+	proj *brigade.Project,
+) error {
 	if !s.shouldEmit(eventType) {
 		return nil
 	}
 	b := &brigade.Build{
-		ProjectID: proj.ID,
-		Type:      eventType,
-		Provider:  "github",
-		Revision:  &rev,
-		Payload:   payload,
+		ProjectID:  proj.ID,
+		Type:       eventType,
+		Provider:   "github",
+		ShortTitle: shortTitle,
+		LongTitle:  longTitle,
+		Revision:   &rev,
+		Payload:    payload,
 	}
 	return s.store.CreateBuild(b)
 }
@@ -658,4 +696,42 @@ func validateSignature(signature, secretKey string, payload []byte) error {
 		return errors.New("payload signature check failed")
 	}
 	return nil
+}
+
+func getTitlesFromPushEvent(pe *github.PushEvent) (string, string) {
+	var shortTitle, longTitle string
+	if pe != nil && pe.Ref != nil {
+		if refSubmatches :=
+			branchRefRegex.FindStringSubmatch(*pe.Ref); len(refSubmatches) == 2 {
+			shortTitle = fmt.Sprintf("branch: %s", refSubmatches[1])
+			longTitle = shortTitle
+		} else if refSubmatches :=
+			tagRefRegex.FindStringSubmatch(*pe.Ref); len(refSubmatches) == 2 {
+			shortTitle = fmt.Sprintf("tag: %s", refSubmatches[1])
+			longTitle = shortTitle
+		}
+	}
+	return shortTitle, longTitle
+}
+
+func getTitlesFromIssue(issue *github.Issue) (string, string) {
+	var shortTitle, longTitle string
+	if issue != nil && issue.Number != nil {
+		shortTitle = fmt.Sprintf("PR #%d", *issue.Number)
+		if issue.Title != nil {
+			longTitle = fmt.Sprintf("%s: %s", shortTitle, *issue.Title)
+		}
+	}
+	return shortTitle, longTitle
+}
+
+func getTitlesFromPR(pr *github.PullRequest) (string, string) {
+	var shortTitle, longTitle string
+	if pr != nil && pr.Number != nil {
+		shortTitle = fmt.Sprintf("PR #%d", *pr.Number)
+		if pr.Title != nil {
+			longTitle = fmt.Sprintf("%s: %s", shortTitle, *pr.Title)
+		}
+	}
+	return shortTitle, longTitle
 }

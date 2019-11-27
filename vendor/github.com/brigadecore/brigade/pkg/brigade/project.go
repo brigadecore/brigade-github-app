@@ -46,7 +46,8 @@ type Project struct {
 	ImagePullSecrets string `json:"imagePullSecrets"`
 
 	// WorkerCommand is a string command that can be issued to the worker image.
-	// This is an alternative to the 'yarn start' command usually issued.
+	// This is an alternative to the default 'yarn -s start' command (or other
+	// globally configured command) usually issued.
 	WorkerCommand string `json:"workerCommand"`
 
 	// BrigadejsPath contains the path for the Brigade.js file in the source repo
@@ -55,10 +56,10 @@ type Project struct {
 	GenericGatewaySecret string `json:"genericGatewaySecret"`
 }
 
-// SecretsMap is a map[string]string for storing secrets.
+// SecretsMap is a map[string]interface{} for storing secrets.
 //
 // When secrets are marshaled, values will be redacted.
-type SecretsMap map[string]string
+type SecretsMap map[string]interface{}
 
 const redacted = "REDACTED"
 
@@ -107,7 +108,8 @@ type Repo struct {
 	// Traditionally, this is an HTTPS URL.
 	CloneURL string `json:"cloneURL"`
 	// SSHKey is the auth string for SSH-based cloning
-	SSHKey string `json:"-"`
+	SSHKey  string `json:"-"`
+	SSHCert string `json:"-"`
 }
 
 // Kubernetes describes the Kubernetes configuration for a project.
