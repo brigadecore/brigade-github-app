@@ -67,7 +67,7 @@ redeploy:
 
 .PHONY: dep
 dep:
-	$(DOCKER_CMD) dep ensure -v
+	$(DOCKER_CMD) go mod tidy && go mod vendor
 
 ################################################################################
 # Tests                                                                        #
@@ -77,7 +77,7 @@ dep:
 # tracked, vendored dependencies
 .PHONY: verify-vendored-code
 verify-vendored-code:
-	$(DOCKER_CMD) dep check
+	$(DOCKER_CMD) go mod verify
 
 .PHONY: lint
 lint:
