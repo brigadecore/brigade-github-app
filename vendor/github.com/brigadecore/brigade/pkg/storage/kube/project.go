@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +20,7 @@ const secretTypeProject = "brigade.sh/project"
 // GetProjects retrieves all projects from storage.
 func (s *store) GetProjects() ([]*brigade.Project, error) {
 	lo := meta.ListOptions{LabelSelector: "app=brigade,component=project"}
-	secretList, err := s.client.CoreV1().Secrets(s.namespace).List(lo)
+	secretList, err := s.client.CoreV1().Secrets(s.namespace).List(context.TODO(), lo)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +85,8 @@ func SecretFromProject(project *brigade.Project) (v1.Secret, error) {
 			"buildStorageSize":  project.Kubernetes.BuildStorageSize,
 			"defaultScript":     project.DefaultScript,
 			"defaultScriptName": project.DefaultScriptName,
+			"defaultConfig":     project.DefaultConfig,
+			"defaultConfigName": project.DefaultConfigName,
 
 			"repository": project.Repo.Name,
 			"sshKey":     project.Repo.SSHKey,
@@ -104,6 +107,7 @@ func SecretFromProject(project *brigade.Project) (v1.Secret, error) {
 			"allowHostMounts":      bfmt(project.AllowHostMounts),
 			"workerCommand":        project.WorkerCommand,
 			"brigadejsPath":        project.BrigadejsPath,
+			"brigadeConfigPath":    project.BrigadeConfigPath,
 			"genericGatewaySecret": project.GenericGatewaySecret,
 
 			"kubernetes.cacheStorageClass": project.Kubernetes.CacheStorageClass,
@@ -125,7 +129,7 @@ func (s *store) CreateProject(project *brigade.Project) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.client.CoreV1().Secrets(s.namespace).Create(&secret)
+	_, err = s.client.CoreV1().Secrets(s.namespace).Create(context.TODO(), &secret, meta.CreateOptions{})
 	return err
 }
 
@@ -141,14 +145,14 @@ func (s *store) ReplaceProject(project *brigade.Project) error {
 		return err
 	}
 
-	_, err = s.client.CoreV1().Secrets(s.namespace).Update(&secret)
+	_, err = s.client.CoreV1().Secrets(s.namespace).Update(context.TODO(), &secret, meta.UpdateOptions{})
 
 	return err
 }
 
 // DeleteProject deletes a project from storage.
 func (s *store) DeleteProject(id string) error {
-	return s.client.CoreV1().Secrets(s.namespace).Delete(id, &meta.DeleteOptions{})
+	return s.client.CoreV1().Secrets(s.namespace).Delete(context.TODO(), id, meta.DeleteOptions{})
 }
 
 // loadProjectConfig loads a project config from inside of Kubernetes.
@@ -156,7 +160,7 @@ func (s *store) DeleteProject(id string) error {
 // The namespace is the namespace where the secret is stored.
 func (s *store) loadProjectConfig(id string) (*brigade.Project, error) {
 	// The project config is stored in a secret.
-	secret, err := s.client.CoreV1().Secrets(s.namespace).Get(id, meta.GetOptions{})
+	secret, err := s.client.CoreV1().Secrets(s.namespace).Get(context.TODO(), id, meta.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -193,6 +197,8 @@ func NewProjectFromSecret(secret *v1.Secret, namespace string) (*brigade.Project
 
 	proj.DefaultScript = sv.String("defaultScript")
 	proj.DefaultScriptName = sv.String("defaultScriptName")
+	proj.DefaultConfig = sv.String("defaultConfig")
+	proj.DefaultConfigName = sv.String("defaultConfigName")
 
 	proj.Repo = brigade.Repo{
 		Name: sv.String("repository"),
