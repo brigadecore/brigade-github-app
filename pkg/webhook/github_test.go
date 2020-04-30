@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v18/github"
 	gin "gopkg.in/gin-gonic/gin.v1"
 
 	"github.com/brigadecore/brigade/pkg/brigade"

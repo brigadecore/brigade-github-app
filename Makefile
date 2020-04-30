@@ -22,7 +22,9 @@ BASE_PACKAGE_NAME := github.com/brigadecore/brigade-github-app
 
 ifneq ($(SKIP_DOCKER),true)
 	PROJECT_ROOT := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
-	DEV_IMAGE := quay.io/deis/lightweight-docker-go:v0.6.0
+	# https://github.com/krancour/go-tools
+	# https://hub.docker.com/repository/docker/krancour/go-tools
+	DEV_IMAGE := krancour/go-tools:v0.1.0
 	DOCKER_CMD := docker run \
 		-it \
 		--rm \
@@ -65,9 +67,9 @@ redeploy:
 	sleep 20
 	kubectl logs -f `kubectl get po -l app=github-app-test-brigade-github-app -o name | tail -n 1 | sed 's/pod\///'`
 
-.PHONY: dep
-dep:
-	$(DOCKER_CMD) dep ensure -v
+.PHONY: resolve-dependencies
+resolve-dependencies:
+	$(DOCKER_CMD) sh -c 'go mod tidy && go mod vendor'
 
 ################################################################################
 # Tests                                                                        #
@@ -77,7 +79,7 @@ dep:
 # tracked, vendored dependencies
 .PHONY: verify-vendored-code
 verify-vendored-code:
-	$(DOCKER_CMD) dep check
+	$(DOCKER_CMD) go mod verify
 
 .PHONY: lint
 lint:

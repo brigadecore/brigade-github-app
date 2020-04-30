@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-github/v18/github"
+
 	"github.com/brigadecore/brigade-github-app/pkg/check"
 	ghlib "github.com/brigadecore/brigade-github-app/pkg/github"
 	"github.com/brigadecore/brigade-github-app/pkg/webhook"
-	"github.com/google/go-github/github"
 )
 
 func main() {
