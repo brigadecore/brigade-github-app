@@ -2,13 +2,10 @@ module github.com/brigadecore/brigade-github-app
 
 go 1.14
 
-replace (
-	github.com/brigadecore/brigade => github.com/krancour/brigade v1.0.1-0.20200429204016-698f7e6e18ef
-	k8s.io/client-go => k8s.io/client-go v0.18.2
-)
+replace k8s.io/client-go => k8s.io/client-go v0.18.2
 
 require (
-	github.com/brigadecore/brigade v1.2.2-0.20191126194738-509b6edd3722
+	github.com/brigadecore/brigade v1.4.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/google/go-github/v18 v18.2.0
 	github.com/stretchr/testify v1.4.0
