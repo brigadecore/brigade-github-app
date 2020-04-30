@@ -22,6 +22,8 @@ BASE_PACKAGE_NAME := github.com/brigadecore/brigade-github-app
 
 ifneq ($(SKIP_DOCKER),true)
 	PROJECT_ROOT := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
+	# https://github.com/krancour/go-tools
+	# https://hub.docker.com/repository/docker/krancour/go-tools
 	DEV_IMAGE := krancour/go-tools:v0.1.0
 	DOCKER_CMD := docker run \
 		-it \
@@ -65,9 +67,9 @@ redeploy:
 	sleep 20
 	kubectl logs -f `kubectl get po -l app=github-app-test-brigade-github-app -o name | tail -n 1 | sed 's/pod\///'`
 
-.PHONY: dep
-dep:
-	$(DOCKER_CMD) go mod tidy && go mod vendor
+.PHONY: resolve-dependencies
+resolve-dependencies:
+	$(DOCKER_CMD) sh -c 'go mod tidy && go mod vendor'
 
 ################################################################################
 # Tests                                                                        #
