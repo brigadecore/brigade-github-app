@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v18/github"
+	"github.com/google/go-github/v32/github"
 
 	"github.com/brigadecore/brigade-github-app/pkg/check"
 	ghlib "github.com/brigadecore/brigade-github-app/pkg/github"

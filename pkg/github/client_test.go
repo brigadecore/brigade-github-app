@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	baseURL   = "http://example.com/base/"
-	uploadURL = "http://example.com/upload/"
+	baseURL   = "http://example.com/base/api/v3/"
+	uploadURL = "http://example.com/upload/api/v3/api/uploads/"
 	testToken = "totallyFake"
 )
 
