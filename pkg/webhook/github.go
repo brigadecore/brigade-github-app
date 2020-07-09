@@ -14,7 +14,7 @@ import (
 
 	"github.com/brigadecore/brigade/pkg/brigade"
 	"github.com/brigadecore/brigade/pkg/storage"
-	"github.com/google/go-github/v18/github"
+	"github.com/google/go-github/v32/github"
 	gin "gopkg.in/gin-gonic/gin.v1"
 
 	ghlib "github.com/brigadecore/brigade-github-app/pkg/github"

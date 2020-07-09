@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/go-github/v32/github"
 )
 
 // GetInstallationToken returns an installation token and its expiry time for
@@ -34,6 +35,7 @@ func GetInstallationToken(
 	installationToken, _, err := githubClient.Apps.CreateInstallationToken(
 		context.Background(),
 		installationID,
+		&github.InstallationTokenOptions{},
 	)
 	if err != nil {
 		return "", time.Time{}, err
