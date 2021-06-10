@@ -4,7 +4,7 @@ const { Check } = require("@brigadecore/brigade-utils");
 const projectOrg = "brigadecore";
 const projectName = "brigade-github-app";
 
-const goImg = "krancour/go-tools:v0.1.0";
+const goImg = "brigadecore/go-tools:v0.1.0";
 const gopath = "/go";
 const localPath = gopath + `/src/github.com/${projectOrg}/${projectName}`;
 
