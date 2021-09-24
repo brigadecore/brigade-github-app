@@ -1,3 +1,8 @@
+> Note: This gateway is compatible with Brigade v1.x releases.
+> For the Brigade v2-compatible GitHub gateway, see the
+> [Brigade GitHub Gateway](https://github.com/brigadecore/brigade-github-gateway)
+> repository.
+
 # Brigade Github App: Advanced GitHub Gateway for Brigade
 
 This is a [Brigade](https://github.com/brigadecore/brigade) gateway that provides a
