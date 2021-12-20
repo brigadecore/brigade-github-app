@@ -16,3 +16,6 @@ pvt/
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+.brigade/secrets.yaml
+.brigade/node_modules/
