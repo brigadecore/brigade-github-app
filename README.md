@@ -1,7 +1,10 @@
-> Note: This gateway is compatible with Brigade v1.x releases.
-> For the Brigade v2-compatible GitHub gateway, see the
+> ⚠️&nbsp;&nbsp;This repo contains the source for a component of the Brigade
+> v1.x ecosystem. Brigade v1.x reached end-of-life on June 1, 2022 and as a
+> result, this component is no longer maintained.
+>
+> Brigade v2 users can utilize the
 > [Brigade GitHub Gateway](https://github.com/brigadecore/brigade-github-gateway)
-> repository.
+> to support the use cases previously supported by this gateway.
 
 # Brigade Github App: Advanced GitHub Gateway for Brigade
 
